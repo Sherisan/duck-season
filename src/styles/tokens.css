@@ -1,0 +1,63 @@
+/* Crash Game Arcade design tokens, plus this game's accent (--game). */
+:root {
+  /* ground and surfaces */
+  --ink: #07090d;
+  --ink-2: #0c0f15;
+  --surface: #11151d;
+  --surface-2: #10141b;
+  --raised: #191e29;
+  --raised-2: #222837;
+  --line: #262d3c;
+  --line-2: #343c4f;
+  --line-soft: #1d2330;
+
+  /* text */
+  --text: #efe9db;
+  --soft: #c8ccd6;
+  --muted: #969cab;
+
+  /* gold is the only action colour */
+  --gold: #d9b45a;
+  --gold-2: #f4d78e;
+  --gold-3: #fff1c4;
+  --gold-deep: #8a6420;
+  --on-gold: #1b1408;
+
+  /* money colours: win only means money won, loss only means money lost */
+  --win: #3fd68a;
+  --win-2: #8ff5c0;
+  --on-win: #03200f;
+  --loss: #ff6a5c;
+  --loss-2: #ffb1a8;
+
+  /* per-game accent */
+  --game: #6cc4ff;
+
+  /* type */
+  --font-display: 'Oxanium', 'Bahnschrift', 'Arial Narrow', sans-serif;
+  --font-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, Menlo, monospace;
+
+  /* spacing */
+  --space-1: 6px;
+  --space-2: 12px;
+  --space-3: 16px;
+  --space-4: 22px;
+
+  /* radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* shadow */
+  --shadow-card: 0 18px 40px -18px rgba(0, 0, 0, 0.7);
+  --shadow-gold: 0 12px 26px -10px rgba(217, 180, 90, 0.75);
+
+  /* gradients */
+  --grad-panel: linear-gradient(180deg, var(--surface), var(--surface-2));
+  --grad-gold: linear-gradient(180deg, #fff1c4 0%, #f4d78e 16%, #d9b45a 58%, #a87a2a 100%);
+  --grad-win: linear-gradient(180deg, #c9ffe3 0%, #8ff5c0 16%, #3fd68a 60%, #1f9a5a 100%);
+  --grad-loss: linear-gradient(180deg, #ffb1a8 0%, #ff6a5c 45%, #d4463a 100%);
+}

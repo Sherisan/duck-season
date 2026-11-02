@@ -1,0 +1,490 @@
+/* ---- stage frame ---------------------------------------------------------------- */
+
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1000 / 560;
+  min-height: 360px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #0b1530;
+  box-shadow:
+    0 24px 50px -24px rgba(0, 0, 0, 0.8),
+    0 0 70px -24px var(--game);
+  isolation: isolate;
+}
+
+.stage__camera {
+  position: absolute;
+  inset: -12px;
+}
+
+.stage__svg {
+  position: absolute;
+  inset: 12px;
+  width: calc(100% - 24px);
+  height: calc(100% - 24px);
+  display: block;
+}
+
+.stage__vignette,
+.stage__danger,
+.stage__flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stage__vignette {
+  background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(3, 4, 10, 0.72) 100%);
+}
+
+.stage__danger {
+  background: radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(255, 70, 50, 0.55) 100%);
+  mix-blend-mode: screen;
+}
+
+.stage__flash {
+  background: #fff3d6;
+}
+
+/* ---- SVG animation hooks -------------------------------------------------------- */
+
+.twinkle {
+  animation: twinkle 3.2s ease-in-out infinite;
+}
+
+.shimmer {
+  animation: shimmer 2.6s ease-in-out infinite;
+}
+
+.mist {
+  animation: drift 30s ease-in-out infinite alternate;
+}
+
+.sway {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: sway 4.5s ease-in-out infinite;
+}
+
+.sunrays {
+  transform-box: view-box;
+  transform-origin: 730px 452px;
+  animation: spin 140s linear infinite;
+}
+
+.window-glow {
+  animation: glow 4s ease-in-out infinite;
+}
+
+.ripple {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: ripple 2.4s ease-out infinite;
+}
+
+.reticle {
+  animation: spin 5s linear infinite;
+}
+
+.duck .wing {
+  transform-box: fill-box;
+  transform-origin: 70% 95%;
+}
+
+.duck .wing-near {
+  animation: flap 0.2s ease-in-out infinite alternate;
+}
+
+.duck .wing-far {
+  animation: flap 0.2s ease-in-out 0.06s infinite alternate;
+}
+
+.duck .scarf {
+  transform-box: fill-box;
+  transform-origin: 100% 50%;
+  animation: flutter 0.32s ease-in-out infinite;
+}
+
+.duck .dizzy {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: spin 1.2s linear infinite;
+}
+
+.hunter-belly {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: breathe 3.6s ease-in-out infinite;
+}
+
+.pipe-smoke circle {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: smoke 2.8s ease-out infinite;
+}
+
+.pipe-smoke circle:nth-child(2) {
+  animation-delay: 0.9s;
+}
+
+.pipe-smoke circle:nth-child(3) {
+  animation-delay: 1.8s;
+}
+
+.pipe-ember {
+  animation: ember 2.8s ease-in-out infinite;
+}
+
+.hunter-bubble {
+  transform-box: fill-box;
+  transform-origin: 0% 100%;
+  animation: pop 0.22s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+/* ---- overlays ------------------------------------------------------------------ */
+
+.stage__top {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stage__icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  background: rgba(7, 9, 13, 0.6);
+  border: 1px solid var(--line);
+  color: var(--soft);
+}
+
+.stage__history {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+
+.stage__hint {
+  font-size: 12px;
+  color: var(--soft);
+}
+
+.pill {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  backdrop-filter: blur(4px);
+}
+
+.pill--low {
+  color: #ff8d82;
+  border-color: rgba(255, 106, 92, 0.45);
+  background: rgba(40, 10, 10, 0.55);
+}
+
+.pill--mid {
+  color: var(--gold-2);
+  border-color: rgba(217, 180, 90, 0.45);
+  background: rgba(30, 24, 10, 0.6);
+}
+
+.pill--high {
+  color: var(--win-2);
+  border-color: rgba(63, 214, 138, 0.5);
+  background: rgba(6, 36, 22, 0.6);
+}
+
+.stage__round {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(7, 9, 13, 0.6);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--soft);
+}
+
+.stage__center {
+  position: absolute;
+  top: 14%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.stage__kicker {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(7, 9, 13, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.kicker--gold {
+  color: var(--gold-2);
+}
+.kicker--game {
+  color: var(--game);
+}
+.kicker--loss {
+  color: #ff8d82;
+}
+
+.stage__mult {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(56px, 8.4vw, 112px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.stage__mult--waiting {
+  color: var(--text);
+  opacity: 0.55;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.6);
+}
+
+.stage__mult--flying {
+  color: #fff6e0;
+  text-shadow:
+    0 0 30px rgba(255, 214, 140, 0.6),
+    0 4px 18px rgba(0, 0, 0, 0.6);
+}
+
+.stage__mult--crashed {
+  color: var(--loss);
+  text-shadow:
+    0 0 32px rgba(255, 106, 92, 0.6),
+    0 4px 18px rgba(0, 0, 0, 0.6);
+}
+
+.countdown {
+  width: 240px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(7, 9, 13, 0.65);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.countdown__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-2), var(--gold));
+}
+
+.stage__sub {
+  font-size: 15px;
+  font-weight: 600;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+
+.result {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+  font-size: 14px;
+  backdrop-filter: blur(6px);
+  animation: pop 0.25s ease-out both;
+}
+
+.result--win {
+  background: rgba(63, 214, 138, 0.16);
+  border: 1px solid rgba(143, 245, 192, 0.6);
+  color: var(--win-2);
+}
+
+.result--loss {
+  background: rgba(255, 106, 92, 0.16);
+  border: 1px solid rgba(255, 106, 92, 0.6);
+  color: var(--loss-2);
+}
+
+.coin-burst {
+  position: absolute;
+  pointer-events: none;
+}
+
+.celebrate {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  width: 320px;
+  height: 220px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.celebrate__rays {
+  position: absolute;
+  opacity: 0.55;
+  animation: spin 7s linear infinite;
+}
+
+.celebrate__plaque {
+  position: relative;
+  padding: 18px 30px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(34, 40, 55, 0.96), rgba(17, 21, 29, 0.96));
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 50px -6px rgba(217, 180, 90, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  animation: pop 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.celebrate__label {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold-2);
+}
+
+.celebrate__total {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 46px;
+  line-height: 1;
+  color: var(--win-2);
+  text-shadow: 0 0 22px rgba(63, 214, 138, 0.6);
+}
+
+.celebrate__at {
+  font-size: 13px;
+  color: var(--soft);
+}
+
+.curve {
+  position: absolute;
+  right: 14px;
+  bottom: 50px;
+  width: 226px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(7, 9, 13, 0.66);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+}
+
+.curve svg {
+  display: block;
+  margin-top: 4px;
+}
+
+.curve__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+
+.gauge {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+}
+
+.gauge__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gauge__track {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(7, 9, 13, 0.7);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.gauge__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: var(--radius-pill);
+  background: var(--game);
+  box-shadow: 0 0 12px var(--game);
+}
+
+.gauge__tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.gauge__scale {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  /* a shorter stage shows more of the scene's width, so Sir Reginald stays in shot */
+  .stage {
+    min-height: 280px;
+  }
+  .curve,
+  .stage__round {
+    display: none;
+  }
+  .stage__center {
+    top: 13%;
+    gap: 6px;
+  }
+  .stage__mult {
+    font-size: 48px;
+  }
+  .stage__sub {
+    font-size: 13px;
+  }
+  .result {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+}
