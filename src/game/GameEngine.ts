@@ -1,4 +1,20 @@
-import { HOLD_MS, START_BALANCE, WAIT_MS, duckPosition, multiplierAt, winTier } from './engine';
+import {
+  DUCK_SPEED,
+  DUCK_START,
+  HOLD_MS,
+  MAX_MULT,
+  SKY,
+  START_BALANCE,
+  WAIT_MS,
+  duckPosition,
+  multiplierAt,
+  SKY_OVER_HUNTER,
+  shotGap,
+  shotRandom,
+  sightRadius,
+  trackRate,
+  winTier,
+} from './engine';
 import type { RoundProvider, RoundResult } from './fairness';
 import { fmt, fmtX, parseAmount, parseNum } from './format';
 import type { GameState, RoundsOption, Slot } from './types';
@@ -11,8 +27,11 @@ type Work = Pick<
 export interface EngineEvents {
   launch?: () => void;
   crash?: (m: number) => void;
+  miss?: () => void;
   cashout?: (m: number) => void;
 }
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 const MAX_ROWS = 12;
 const MAX_HISTORY = 30;
@@ -39,6 +58,11 @@ export class GameEngine {
   private starting = false;
   private retryAt = 0;
   private lastFrame = 0;
+  /** Where the player is steering the duck, or null to fly the default path. */
+  private pointer: { x: number; y: number } | null = null;
+  /** Flight time (s) of the hunter's next dodgeable shot. */
+  private nextShotT = Infinity;
+  private rng: () => number = Math.random;
   events: EngineEvents = {};
 
   constructor(private provider: RoundProvider) {
@@ -52,6 +76,14 @@ export class GameEngine {
       crashAt: 0,
       crashX: 0,
       crashY: 0,
+      duckX: DUCK_START.x,
+      duckY: DUCK_START.y,
+      duckVX: 0,
+      duckVY: 0,
+      aimX: DUCK_START.x,
+      aimY: DUCK_START.y,
+      steering: false,
+      misses: [],
       points: [],
       history: [],
       nonce: 0,
@@ -184,7 +216,25 @@ export class GameEngine {
         void this.newRound();
       }
       if (this.round && this.round.nonce === s.nonce && now >= s.waitEnd) {
-        this.set({ phase: 'flying', t0: now, mult: 1, points: [{ t: 0, m: 1 }], now, cloudX });
+        this.pointer = null;
+        this.rng = shotRandom(this.round.serverSeed, this.round.nonce);
+        this.nextShotT = shotGap(this.rng(), true);
+        this.set({
+          phase: 'flying',
+          t0: now,
+          mult: 1,
+          points: [{ t: 0, m: 1, x: DUCK_START.x, y: DUCK_START.y }],
+          duckX: DUCK_START.x,
+          duckY: DUCK_START.y,
+          duckVX: 0,
+          duckVY: 0,
+          aimX: DUCK_START.x,
+          aimY: DUCK_START.y,
+          steering: false,
+          misses: [],
+          now,
+          cloudX,
+        });
         this.events.launch?.();
         return;
       }
@@ -196,10 +246,47 @@ export class GameEngine {
       const round = this.round;
       const t = (now - s.t0) / 1000;
       const m = multiplierAt(t);
-      if (m >= round.crash) {
-        this.crash(round, t, now, cloudX);
+      const dts = Math.max(0.001, dt / 1000);
+
+      // the duck: towards the player's cursor (with a top speed), or along its default path
+      let duckX: number, duckY: number;
+      if (this.pointer) {
+        const ddx = this.pointer.x - s.duckX;
+        const ddy = this.pointer.y - s.duckY;
+        const dist = Math.hypot(ddx, ddy);
+        const step = Math.min(dist * (1 - Math.exp(-dts * 10)), DUCK_SPEED * dts);
+        duckX = dist > 0 ? s.duckX + (ddx / dist) * step : s.duckX;
+        duckY = dist > 0 ? s.duckY + (ddy / dist) * step : s.duckY;
+      } else {
+        const p = duckPosition(m, t);
+        duckX = p.x;
+        duckY = p.y;
+      }
+      const duckVX = (duckX - s.duckX) / dts;
+      const duckVY = (duckY - s.duckY) / dts;
+
+      // the hunter's sight chases the duck, with a lag the player can exploit
+      const f = 1 - Math.exp(-trackRate(m, s.misses.length) * dts);
+      const aimX = s.aimX + (duckX - s.aimX) * f;
+      const aimY = s.aimY + (duckY - s.aimY) * f;
+
+      // at the seeded crash point he never misses
+      if (m >= round.crash || m >= MAX_MULT) {
+        this.crash(round, Math.min(m, round.crash), t, now, cloudX, duckX, duckY);
         return;
       }
+      // before it, his shots hit only if the duck is inside his sight ring
+      let misses = s.misses;
+      if (t >= this.nextShotT) {
+        if (Math.hypot(duckX - aimX, duckY - aimY) <= sightRadius(m)) {
+          this.crash(round, m, t, now, cloudX, duckX, duckY);
+          return;
+        }
+        misses = [...s.misses, { at: now, x: aimX, y: aimY }];
+        this.nextShotT = t + shotGap(this.rng(), false);
+        this.events.miss?.();
+      }
+
       let w: Work | null = null;
       for (let i = 0; i < s.slots.length; i++) {
         const b = s.slots[i].bet;
@@ -208,9 +295,9 @@ export class GameEngine {
           this.applyCash(w, i, b.target, now);
         }
       }
-      const patch: Partial<GameState> = { ...(w ?? {}), mult: m, now, cloudX };
+      const patch: Partial<GameState> = { ...(w ?? {}), mult: m, now, cloudX, duckX, duckY, duckVX, duckVY, aimX, aimY, misses };
       const last = s.points[s.points.length - 1];
-      if (!last || t - last.t > 0.12) patch.points = [...s.points, { t, m }];
+      if (!last || t - last.t > 0.12) patch.points = [...s.points, { t, m, x: duckX, y: duckY }];
       this.set(patch);
       return;
     }
@@ -223,38 +310,39 @@ export class GameEngine {
     this.set({ now, cloudX });
   }
 
-  private crash(round: RoundResult, t: number, now: number, cloudX: number) {
+  /** The duck is hit at multiplier m, at (x, y). */
+  private crash(round: RoundResult, m: number, t: number, now: number, cloudX: number, x: number, y: number) {
     const s = this.state;
-    const pos = duckPosition(round.crash, t);
     const w = this.work();
     w.slots.forEach((sl, i) => {
       if (sl.bet && sl.bet.cashedAt === null) {
         const a = sl.bet.amount;
         w.rowId += 1;
-        w.rows = [
-          { id: w.rowId, round: round.nonce, slot: i + 1, bet: a, at: round.crash, win: false, profit: -a },
-          ...w.rows,
-        ].slice(0, MAX_ROWS);
+        w.rows = [{ id: w.rowId, round: round.nonce, slot: i + 1, bet: a, at: m, win: false, profit: -a }, ...w.rows].slice(0, MAX_ROWS);
         w.stats.rounds += 1;
         w.stats.profit -= a;
         if (sl.bet.auto) w.lim.net -= a;
-        sl.result = { win: false, text: `Bet ${i + 1} shot down at ${fmtX(round.crash)}. Bet lost.` };
+        sl.result = { win: false, text: `Bet ${i + 1} shot down at ${fmtX(m)}. Bet lost.` };
       }
     });
+    this.pointer = null;
+    this.nextShotT = Infinity;
     this.set({
       ...w,
       phase: 'crashed',
-      mult: round.crash,
+      mult: m,
       crashAt: now,
-      crashX: pos.x,
-      crashY: pos.y,
+      crashX: x,
+      crashY: y,
+      duckX: x,
+      duckY: y,
       now,
       cloudX,
-      history: [round.crash, ...s.history].slice(0, MAX_HISTORY),
-      points: [...s.points, { t, m: round.crash }],
-      revealed: { nonce: round.nonce, serverSeed: round.serverSeed, crash: round.crash },
+      history: [m, ...s.history].slice(0, MAX_HISTORY),
+      points: [...s.points, { t, m, x, y }],
+      revealed: { nonce: round.nonce, serverSeed: round.serverSeed, crash: round.crash, hitAt: m },
     });
-    this.events.crash?.(round.crash);
+    this.events.crash?.(m);
   }
 
   private async newRound() {
@@ -317,6 +405,15 @@ export class GameEngine {
   }
 
   // ---- player actions -------------------------------------------------------------
+
+  /** Steer the flying duck towards a point in scene coordinates. */
+  steer(x: number, y: number) {
+    if (this.state.phase !== 'flying') return;
+    const px = clamp(x, SKY.minX, SKY.maxX);
+    const maxY = px < SKY_OVER_HUNTER.maxX ? SKY_OVER_HUNTER.maxY : SKY.maxY;
+    this.pointer = { x: px, y: clamp(y, SKY.minY, maxY) };
+    if (!this.state.steering) this.set({ steering: true });
+  }
 
   setAmountText(i: number, text: string) {
     this.patchSlot(i, { amountStr: text });

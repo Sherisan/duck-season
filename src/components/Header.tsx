@@ -25,7 +25,7 @@ export function Header({ balance, soundOn, engine, sfx, onHelp }: Props) {
           <h1>Duck Season</h1>
         </div>
         <div className="topbar__tags">
-          <span className="tag">RTP 99%</span>
+          <span className="tag">RTP up to 99%</span>
           <span className="tag">Max 10 000×</span>
           <span className="tag">
             Volatility

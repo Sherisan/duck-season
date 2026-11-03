@@ -28,19 +28,82 @@ export function crashFromHash(hex: string): number {
   return crashFromUniform(r);
 }
 
-/** Where the duck is in scene coordinates (viewBox 0 0 1000 560). */
+/** Where the duck floats before take-off: on the water just in front of the hunter. */
+export const DUCK_START = { x: 450, y: 468 };
+
+/** Where the duck is in scene coordinates (viewBox 0 0 1000 560). It lifts off from DUCK_START. */
 export function duckPosition(m: number, t: number): { x: number; y: number } {
   const p = Math.min(1, Math.log(m) / Math.log(12));
-  return { x: 470 + p * 330, y: 400 - p * 280 + Math.sin(t * 4.2) * 6 };
+  return { x: DUCK_START.x + p * 350, y: DUCK_START.y - 16 - p * 332 + Math.sin(t * 4.2) * 6 };
 }
 
-/** Must match the rotate() pivot in art/Hunter.tsx. */
-export const GUN_PIVOT = { x: 205, y: 372 };
+/** Hunter size on stage (1 = as drawn). He scales around his feet so he stays on the bank. */
+export const HUNTER_SCALE = 0.75;
+export const HUNTER_FEET = { x: 182, y: 547 };
+/** Sideways nudge for the hunter after scaling (negative = left). */
+export const HUNTER_SHIFT = -90;
+
+/** SVG transform that places art/Hunter.tsx (drawn at full size) on the stage. */
+export const HUNTER_TRANSFORM = `translate(${HUNTER_FEET.x + HUNTER_SHIFT} ${HUNTER_FEET.y}) scale(${HUNTER_SCALE}) translate(${-HUNTER_FEET.x} ${-HUNTER_FEET.y})`;
+
+/** A point in the hunter's own drawing, in scene coordinates. */
+function hunterToScene(x: number, y: number) {
+  return { x: HUNTER_FEET.x + HUNTER_SHIFT + (x - HUNTER_FEET.x) * HUNTER_SCALE, y: HUNTER_FEET.y + (y - HUNTER_FEET.y) * HUNTER_SCALE };
+}
+
+/** The rotate() pivot in art/Hunter.tsx (205, 372), in scene coordinates. */
+export const GUN_PIVOT = hunterToScene(205, 372);
+
+/** Muzzle tip in scene coordinates for a gun angle (art/Hunter.tsx draws it at (450, 365) before aiming). */
+export function muzzlePosition(aimDeg: number): { x: number; y: number } {
+  const a = (aimDeg * Math.PI) / 180;
+  const vx = 450 - 205;
+  const vy = 365 - 372;
+  return hunterToScene(205 + vx * Math.cos(a) - vy * Math.sin(a), 372 + vx * Math.sin(a) + vy * Math.cos(a));
+}
+
+/** Radius of the hunter's inner sight ring at multiplier m. The duck is hit if it is inside it when he fires. */
+export function sightRadius(m: number): number {
+  return 44 - Math.min(0.42, (Math.log(m) / Math.log(60)) * 0.42) * 24;
+}
+
+/** How quickly the sight closes in on the duck (per second). Faster at high multipliers and after each miss. */
+export function trackRate(m: number, misses: number): number {
+  return 1.3 + 2.6 * Math.min(1, Math.log(m) / Math.log(20)) + misses * 0.9;
+}
+
+/**
+ * Seconds until his next shot: the first comes 1.4–3s after take-off, then 1.1–2.4s after each miss.
+ * r is a uniform draw from the round's seeded generator, so shot times are fixed in advance too.
+ */
+export function shotGap(r: number, first: boolean): number {
+  return first ? 1.4 + r * 1.6 : 1.1 + r * 1.3;
+}
+
+/** Deterministic generator for a round's shot times, seeded from its server seed and nonce. */
+export function shotRandom(serverSeed: string, nonce: number): () => number {
+  let h = 2166136261;
+  for (const ch of `${serverSeed}:${nonce}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  let a = h >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Where the player can steer the duck: open sky, clear of the water, and above the hunter's hat on the left. */
+export const SKY = { minX: 40, maxX: 960, minY: 60, maxY: 440 };
+export const SKY_OVER_HUNTER = { maxX: 340, maxY: 250 };
+/** Top speed of the steered duck, in scene units per second. */
+export const DUCK_SPEED = 620;
 
 /** Gun angle in degrees for a target point, clamped to a natural range. */
 export function aimAngle(x: number, y: number): number {
   const a = (Math.atan2(y - GUN_PIVOT.y, x - GUN_PIVOT.x) * 180) / Math.PI;
-  return Math.max(-40, Math.min(-4, a));
+  return Math.max(-58, Math.min(-4, a));
 }
 
 export function winTier(m: number): string | null {
@@ -52,4 +115,23 @@ export function winTier(m: number): string | null {
 
 export function chanceFor(target: number): number {
   return ((1 - HOUSE_EDGE) / target) * 100;
+}
+
+/** Seconds the shot takes to reach the duck. Long enough to see the tracer. */
+export const SHOT_TRAVEL = 0.16;
+/** Where the duck meets the lake. */
+export const SURFACE = DUCK_START.y + 8;
+export const GRAVITY = 900;
+
+/** Seconds a duck hit at height cy, knocked along a shot with vertical direction uy, takes to reach the water. */
+export function fallTime(cy: number, uy: number): number {
+  const vy = uy * 120 - 30;
+  return (-vy + Math.sqrt(vy * vy + 2 * GRAVITY * Math.max(0, SURFACE - 6 - cy))) / GRAVITY;
+}
+
+/** Seconds from the shot until a duck hit at (x, y) splashes into the lake. */
+export function splashDelay(x: number, y: number): number {
+  const mz = muzzlePosition(aimAngle(x, y));
+  const uy = (y - mz.y) / (Math.hypot(x - mz.x, y - mz.y) || 1);
+  return SHOT_TRAVEL + fallTime(y, uy);
 }

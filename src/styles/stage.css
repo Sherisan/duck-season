@@ -86,7 +86,7 @@
 }
 
 .reticle {
-  animation: spin 5s linear infinite;
+  animation: spin 9s linear infinite;
 }
 
 .duck .wing {
@@ -227,23 +227,23 @@
 
 .stage__center {
   position: absolute;
-  top: 14%;
+  top: 13%;
   left: 0;
   right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   text-align: center;
   pointer-events: none;
 }
 
 .stage__kicker {
-  padding: 4px 12px;
+  padding: 3px 10px;
   border-radius: var(--radius-pill);
   background: rgba(7, 9, 13, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -262,7 +262,7 @@
 .stage__mult {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(56px, 8.4vw, 112px);
+  font-size: clamp(34px, 5vw, 66px);
   line-height: 1;
   letter-spacing: -0.01em;
 }
@@ -288,8 +288,8 @@
 }
 
 .countdown {
-  width: 240px;
-  height: 6px;
+  width: 150px;
+  height: 4px;
   border-radius: var(--radius-pill);
   background: rgba(7, 9, 13, 0.65);
   border: 1px solid var(--line);
@@ -302,7 +302,7 @@
 }
 
 .stage__sub {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
 }
@@ -388,33 +388,6 @@
   color: var(--soft);
 }
 
-.curve {
-  position: absolute;
-  right: 14px;
-  bottom: 50px;
-  width: 226px;
-  padding: 8px 10px;
-  border-radius: var(--radius-md);
-  background: rgba(7, 9, 13, 0.66);
-  border: 1px solid var(--line);
-  backdrop-filter: blur(6px);
-}
-
-.curve svg {
-  display: block;
-  margin-top: 4px;
-}
-
-.curve__head {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--soft);
-}
-
 .gauge {
   position: absolute;
   left: 14px;
@@ -465,26 +438,86 @@
 }
 
 @media (max-width: 720px) {
-  /* a shorter stage shows more of the scene's width, so Sir Reginald stays in shot */
+  /* phones: the scene fits the stage's width (see Stage) and the extra height is sky for the read-outs */
   .stage {
-    min-height: 280px;
+    min-height: 270px;
   }
-  .curve,
+  .stage__svg {
+    inset: 6px;
+    width: calc(100% - 12px);
+    height: calc(100% - 12px);
+  }
   .stage__round {
     display: none;
   }
+  .stage__top {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+  }
+  .stage__icon {
+    width: 26px;
+    height: 26px;
+  }
+  .pill {
+    padding: 3px 8px;
+    font-size: 12px;
+  }
+  /* below the round results, so the two never overlap */
   .stage__center {
-    top: 13%;
-    gap: 6px;
+    top: 46px;
+    gap: 3px;
+  }
+  .gauge {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
   }
   .stage__mult {
-    font-size: 48px;
+    font-size: 32px;
   }
   .stage__sub {
-    font-size: 13px;
+    font-size: 12px;
   }
   .result {
     font-size: 12px;
     padding: 5px 10px;
+  }
+}
+
+/* ---- steering and misses ---------------------------------------------------------- */
+
+.stage--steer {
+  cursor: move;
+  touch-action: none;
+}
+
+.miss-pop {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: 0.06em;
+  fill: #fff1c4;
+  stroke: rgba(5, 8, 16, 0.7);
+  stroke-width: 4px;
+  paint-order: stroke;
+}
+
+.windmill-sails {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: spin 16s linear infinite;
+}
+
+.flock {
+  animation: flock 40s linear infinite;
+}
+
+@keyframes flock {
+  from {
+    transform: translateX(-60px);
+  }
+  to {
+    transform: translateX(160px);
   }
 }

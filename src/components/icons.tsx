@@ -82,8 +82,16 @@ export const CloseIcon = (p: P) => (
     <path d="M6 6l12 12M18 6L6 18" />
   </Icon>
 );
-export const ChartIcon = (p: P) => (
+export const CashOutIcon = (p: P) => (
   <Icon {...p}>
-    <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+    <path d="M12 15V3M7 8l5-5 5 5" />
+    <path d="M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" />
+  </Icon>
+);
+export const CrosshairIcon = (p: P) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="8" />
+    <circle cx="12" cy="12" r="2.5" />
+    <path d="M12 1v5M12 18v5M1 12h5M18 12h5" />
   </Icon>
 );

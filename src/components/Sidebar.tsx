@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import type { GameEngine } from '../game/GameEngine';
-import { verifyRound } from '../game/fairness';
 import { fmt, fmtSigned, fmtX } from '../game/format';
 import type { BetRow, GameState, RoundsOption, Stats } from '../game/types';
-import { AutoIcon, ChartIcon, ShieldIcon } from './icons';
+import { AutoIcon } from './icons';
 
 export function SessionStats({ stats }: { stats: Stats }) {
   const tone = stats.profit > 0 ? 'text-win' : stats.profit < 0 ? 'text-loss' : '';
@@ -101,35 +99,6 @@ export function AutoPlayPanel({ s, engine }: { s: GameState; engine: GameEngine 
   );
 }
 
-/** Bars of the last 30 crash points on a log scale. */
-export function RoundHistoryChart({ history }: { history: number[] }) {
-  const items = history.slice(0, 30).reverse();
-  const max = Math.log(Math.max(10, ...items));
-  const avg = items.length ? items.reduce((a, b) => a + b, 0) / items.length : 0;
-  const under2 = items.filter((h) => h < 2).length;
-  return (
-    <section className="panel" aria-label="Round history">
-      <div className="panel__head">
-        <ChartIcon size={18} className="text-gold" />
-        <h2>{items.length ? `Last ${items.length} round${items.length === 1 ? '' : 's'}` : 'Round history'}</h2>
-        <span className="panel__meta num">{items.length ? `${under2} under 2×` : 'No rounds yet'}</span>
-      </div>
-      <div className="bars" role="img" aria-label={`Crash points of the last ${items.length} rounds`}>
-        {items.length === 0 && <span className="muted small">Bars appear as rounds finish.</span>}
-        {items.map((h, i) => (
-          <span
-            key={i}
-            className={`bars__bar ${h < 2 ? 'is-low' : h >= 10 ? 'is-high' : 'is-mid'}`}
-            style={{ height: `${Math.max(6, (Math.log(Math.max(1.01, h)) / max) * 100)}%` }}
-            title={fmtX(h)}
-          />
-        ))}
-      </div>
-      {items.length > 0 && <p className="muted small num">Average {fmtX(avg)} · highest {fmtX(Math.max(...items))}</p>}
-    </section>
-  );
-}
-
 export function BetHistory({ rows }: { rows: BetRow[] }) {
   return (
     <section className="panel panel--flush" aria-label="Your bets">
@@ -155,59 +124,6 @@ export function BetHistory({ rows }: { rows: BetRow[] }) {
           ))}
         </ul>
       )}
-    </section>
-  );
-}
-
-export function FairnessPanel({ s }: { s: GameState }) {
-  const [check, setCheck] = useState<{ nonce: number; text: string; ok: boolean } | null>(null);
-  const rev = s.revealed;
-
-  const verify = async () => {
-    if (!rev) return;
-    try {
-      const crash = await verifyRound(rev.serverSeed, s.clientSeed, rev.nonce);
-      const ok = crash === rev.crash;
-      setCheck({ nonce: rev.nonce, ok, text: ok ? `Verified: seeds give ${fmtX(crash)}` : `Mismatch: seeds give ${fmtX(crash)}` });
-    } catch {
-      setCheck({ nonce: rev.nonce, ok: false, text: 'Verification needs https or localhost.' });
-    }
-  };
-
-  return (
-    <section className="panel" aria-label="Provably fair">
-      <div className="panel__head">
-        <ShieldIcon size={18} className="text-gold" />
-        <h2>Provably fair</h2>
-        <span className="panel__meta">Round #{s.nonce}</span>
-      </div>
-      <div className="stack-4">
-        <span className="label">Server seed hash</span>
-        <code className="seed">{s.nextHash || 'Generating…'}</code>
-      </div>
-      <div className="stack-4">
-        <span className="label">Client seed</span>
-        <code className="seed">{s.clientSeed}</code>
-      </div>
-      {rev && (
-        <div className="stack-4">
-          <span className="label">
-            Revealed · #{rev.nonce} · {fmtX(rev.crash)}
-          </span>
-          <code className="seed">{rev.serverSeed}</code>
-          <div className="verify">
-            <button className="btn-ghost" onClick={verify}>
-              Verify round #{rev.nonce}
-            </button>
-            {check && check.nonce === rev.nonce && (
-              <span className={`small ${check.ok ? 'text-win' : 'text-loss'}`} role="status">
-                {check.text}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-      <p className="muted small">Result = SHA-256(server seed : client seed : nonce). Crash point = max(1, 0.99 ÷ (1 − r)). 1% house edge.</p>
     </section>
   );
 }

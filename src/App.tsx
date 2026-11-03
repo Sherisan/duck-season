@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { BetPanel } from './components/BetPanel';
 import { Footer, Header } from './components/Header';
 import { HowToPlay } from './components/HowToPlay';
-import { AutoPlayPanel, BetHistory, FairnessPanel, RoundHistoryChart, SessionStats } from './components/Sidebar';
+import { AutoPlayPanel, BetHistory, SessionStats } from './components/Sidebar';
 import { Stage } from './components/Stage';
 import { useEngine, useGameState } from './game/useGame';
 
@@ -19,12 +19,7 @@ export default function App() {
 
         <div className="layout">
           <main className="layout__main">
-            <Stage s={s} />
-            <div className="slots">
-              {s.slots.map((_, i) => (
-                <BetPanel key={i} index={i} s={s} engine={engine} />
-              ))}
-            </div>
+            <Stage s={s} engine={engine} />
             {s.toast && (
               <div className="toast" role="status">
                 <span>{s.toast}</span>
@@ -35,12 +30,15 @@ export default function App() {
             )}
           </main>
 
-          <aside className="layout__side" aria-label="Session and settings">
+          <aside className="layout__side" aria-label="Bets, session and settings">
+            <div className="slots">
+              {s.slots.map((_, i) => (
+                <BetPanel key={i} index={i} s={s} engine={engine} />
+              ))}
+            </div>
             <SessionStats stats={s.stats} />
             <AutoPlayPanel s={s} engine={engine} />
-            <RoundHistoryChart history={s.history} />
             <BetHistory rows={s.rows} />
-            <FairnessPanel s={s} />
           </aside>
         </div>
 

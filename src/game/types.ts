@@ -63,12 +63,25 @@ export interface Celebration {
 export interface FlightPoint {
   t: number;
   m: number;
+  /** Where the duck was, for the flight trail. */
+  x: number;
+  y: number;
+}
+
+/** A shot the hunter fired and missed: where he aimed, and when. */
+export interface Miss {
+  at: number;
+  x: number;
+  y: number;
 }
 
 export interface RevealedRound {
   nonce: number;
   serverSeed: string;
+  /** Multiplier of his first shot, fixed by the seeds. */
   crash: number;
+  /** Where the duck was actually hit (higher than crash if the player dodged). */
+  hitAt: number;
 }
 
 export interface GameState {
@@ -81,6 +94,19 @@ export interface GameState {
   crashAt: number;
   crashX: number;
   crashY: number;
+  /** The duck in flight (steered by the player, or on its default path). */
+  duckX: number;
+  duckY: number;
+  /** Duck velocity, for tilting and facing it the way it is going. */
+  duckVX: number;
+  duckVY: number;
+  /** Centre of the hunter's sight, which chases the duck. */
+  aimX: number;
+  aimY: number;
+  /** True once the player has steered the duck this round. */
+  steering: boolean;
+  /** Shots he has missed this round, latest last. */
+  misses: Miss[];
   points: FlightPoint[];
   history: number[];
   nonce: number;

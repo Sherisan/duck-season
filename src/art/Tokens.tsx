@@ -33,6 +33,20 @@ export function Coin({ size = 24 }: { size?: number }) {
   );
 }
 
+/** Shotgun shell: red hull, brass head. One per bet panel number. */
+export function Shell({ height = 28 }: { height?: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={height / 2} height={height} viewBox="0 0 14 28" aria-hidden="true">
+      <path d="M2 5.5Q2 1.5 7 1.5T12 5.5V19H2z" fill="#c8463a" />
+      <path d="M4.6 2.3L5.2 5.2M7 1.7V5.2M9.4 2.3L8.8 5.2" stroke="#7a1f17" strokeWidth=".8" strokeLinecap="round" />
+      <rect x="3.2" y="6.5" width="1.6" height="11" rx=".8" fill="#fff" opacity=".28" />
+      <rect x="1.5" y="19" width="11" height="6" rx=".8" fill="#d9b45a" />
+      <rect x="2.2" y="19.8" width="9.6" height="1" fill="#fff1c4" opacity=".75" />
+      <rect x=".5" y="24.4" width="13" height="3" rx="1" fill="#a87a2a" />
+    </svg>
+  );
+}
+
 /** Scope reticle crest used as the game mark. */
 export function Logo({ size = 44, accent = '#6cc4ff' }: { size?: number; accent?: string }) {
   return (

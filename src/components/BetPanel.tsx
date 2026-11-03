@@ -1,9 +1,9 @@
-import { Chip, Coin } from '../art/Tokens';
+import { Chip, Coin, Shell } from '../art/Tokens';
 import { chanceFor } from '../game/engine';
 import type { GameEngine } from '../game/GameEngine';
 import { fmt, fmtX, parseAmount, parseNum } from '../game/format';
 import type { GameState } from '../game/types';
-import { Switch } from './Switch';
+import { AutoIcon, CashOutIcon, CrosshairIcon } from './icons';
 
 type Variant = 'gold' | 'win' | 'raised' | 'done';
 
@@ -13,6 +13,8 @@ interface ButtonState {
   variant: Variant;
   disabled?: boolean;
 }
+
+type Tone = 'idle' | 'gold' | 'auto' | 'live' | 'win' | 'loss';
 
 const CHIPS = [10, 50, 100, 500];
 
@@ -40,6 +42,16 @@ export function BetPanel({ index, s, engine }: { index: number; s: GameState; en
   else btn = { label: 'Bet next round', sub: `${fmt(a)} · queue for launch`, variant: 'gold' };
 
   const live = !!b && ph === 'flying' && b.cashedAt === null;
+
+  let status: { text: string; tone: Tone };
+  if (live) status = { text: 'In flight', tone: 'live' };
+  else if (b && b.cashedAt !== null) status = { text: `Collected at ${fmtX(b.cashedAt)}`, tone: 'win' };
+  else if (b && ph === 'crashed') status = { text: 'Shot down', tone: 'loss' };
+  else if (b) status = { text: 'Bet placed', tone: 'gold' };
+  else if (sl.queued) status = { text: 'Queued for next round', tone: 'gold' };
+  else if (sl.autoOn) status = { text: 'Auto bet on', tone: 'auto' };
+  else status = { text: 'Ready', tone: 'idle' };
+
   const tg = parseNum(sl.targetStr);
   const odds =
     tg >= 1.01 ? `Chance ${chanceFor(tg).toFixed(1)}% · pays ${fmtX(tg)} · wins ${fmt(a * tg)}` : 'Enter 1.01× or more';
@@ -48,49 +60,77 @@ export function BetPanel({ index, s, engine }: { index: number; s: GameState; en
     <section className={`bet-panel${live ? ' bet-panel--live' : ''}${sl.autoOn ? ' bet-panel--auto' : ''}`} aria-label={title}>
       <header className="bet-panel__head">
         <div className="bet-panel__title">
-          <span>{title}</span>
-          {sl.autoOn && <span className="tag tag--win">Auto play on</span>}
+          <span className="bet-panel__shells" aria-hidden="true">
+            {Array.from({ length: index + 1 }, (_, k) => (
+              <Shell key={k} height={18} />
+            ))}
+          </span>
+          <span className="bet-panel__name">
+            <span className="bet-panel__label">{title}</span>
+            <span className={`bet-panel__state bet-panel__state--${status.tone}`}>{status.text}</span>
+          </span>
         </div>
-        <div className="bet-panel__switches">
-          <Switch label="Auto bet" checked={sl.autoOn} onChange={() => engine.toggleAuto(index)} />
-          <Switch label="Auto cash-out" checked={sl.cashOn} onChange={() => engine.toggleCashOut(index)} />
+        <div className="bet-panel__toggles">
+          <button
+            className={`toggle${sl.autoOn ? ' is-on' : ''}`}
+            aria-pressed={sl.autoOn}
+            title="Auto bet"
+            onClick={() => engine.toggleAuto(index)}
+          >
+            <AutoIcon size={12} />
+            Auto
+          </button>
+          <button
+            className={`toggle toggle--cash${sl.cashOn ? ' is-on' : ''}`}
+            aria-pressed={sl.cashOn}
+            title="Auto cash-out"
+            onClick={() => engine.toggleCashOut(index)}
+          >
+            <CashOutIcon size={12} />
+            Cash-out
+          </button>
         </div>
       </header>
 
       <div className="bet-panel__body">
         <div className="bet-panel__controls">
           <div className="amount">
-            <label className="sr-only" htmlFor={`amt-${index}`}>
-              {title} amount
-            </label>
-            <Coin size={24} />
-            <input
-              id={`amt-${index}`}
-              className="amount__input num"
-              inputMode="decimal"
-              value={sl.amountStr}
-              onChange={(ev) => engine.setAmountText(index, ev.target.value)}
-              onBlur={() => engine.normalizeAmount(index)}
-            />
-            <button className="step" aria-label={`Halve ${title}`} onClick={() => engine.setAmount(index, engine.amountOf(index) / 2)}>
-              ½
-            </button>
-            <button className="step" aria-label={`Double ${title}`} onClick={() => engine.setAmount(index, engine.amountOf(index) * 2)}>
-              2×
-            </button>
+            <Coin size={19} />
+            <div className="amount__field">
+              <label className="amount__label" htmlFor={`amt-${index}`}>
+                Stake
+              </label>
+              <input
+                id={`amt-${index}`}
+                className="amount__input num"
+                inputMode="decimal"
+                value={sl.amountStr}
+                onChange={(ev) => engine.setAmountText(index, ev.target.value)}
+                onBlur={() => engine.normalizeAmount(index)}
+              />
+            </div>
+            <div className="amount__steps">
+              <button className="step" aria-label={`Halve ${title}`} onClick={() => engine.setAmount(index, engine.amountOf(index) / 2)}>
+                ½
+              </button>
+              <button className="step" aria-label={`Double ${title}`} onClick={() => engine.setAmount(index, engine.amountOf(index) * 2)}>
+                2×
+              </button>
+            </div>
           </div>
           <div className="chips">
             {CHIPS.map((v) => (
               <button key={v} className="chip" aria-label={`Add ${v}`} onClick={() => engine.setAmount(index, engine.amountOf(index) + v)}>
-                <Chip value={v} />
+                <Chip value={v} size={28} />
               </button>
             ))}
-            <button className="chip chip--max" aria-label="Bet maximum" onClick={() => engine.setAmount(index, s.balance)}>
-              MAX
+            <button className="chip-max" aria-label="Bet maximum" onClick={() => engine.setAmount(index, s.balance)}>
+              Max
             </button>
           </div>
         </div>
         <button className={`big-btn big-btn--${btn.variant}`} onClick={() => engine.mainAction(index)} disabled={btn.disabled}>
+          <CrosshairIcon className="big-btn__mark" size={60} />
           <span className="big-btn__label">{btn.label}</span>
           <span className="big-btn__sub num">{btn.sub}</span>
         </button>

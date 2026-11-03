@@ -6,7 +6,8 @@ import { CloseIcon } from './icons';
 const STEPS = [
   { title: 'Place a bet', text: 'Set an amount in Bet 1, Bet 2 or both before the duck takes off. Chips add to the amount.' },
   { title: 'Watch it climb', text: 'The multiplier rises while the duck flies. Your stake is worth stake × multiplier.' },
-  { title: 'Cash out in time', text: 'Hit Cash out before Sir Reginald fires. If he shoots first, that bet is lost.' },
+  { title: 'Dodge his shots', text: 'Move your cursor to steer the duck. If it is outside his inner sight ring when he fires, he misses. At the crash point he never misses.' },
+  { title: 'Cash out in time', text: 'Hit Cash out before Sir Reginald hits the duck. If he hits it first, that bet is lost.' },
 ];
 
 export function HowToPlay({ onClose }: { onClose: () => void }) {
