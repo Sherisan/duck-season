@@ -2,7 +2,7 @@ import { Coin, Logo } from '../art/Tokens';
 import type { GameEngine } from '../game/GameEngine';
 import { fmt } from '../game/format';
 import type { SoundFx } from '../game/sound';
-import { BackIcon, HelpIcon, MuteIcon, NextIcon, PrevIcon, SoundIcon } from './icons';
+import { HelpIcon, MenuIcon, MuteIcon, NextIcon, PrevIcon, SoundIcon } from './icons';
 
 interface Props {
   balance: number;
@@ -10,14 +10,15 @@ interface Props {
   engine: GameEngine;
   sfx: SoundFx;
   onHelp: () => void;
+  onMenu: () => void;
 }
 
-export function Header({ balance, soundOn, engine, sfx, onHelp }: Props) {
+export function Header({ balance, soundOn, engine, sfx, onHelp, onMenu }: Props) {
   return (
     <header className="topbar">
       <div className="topbar__left">
-        <button className="icon-btn" aria-label="Back to lobby">
-          <BackIcon />
+        <button className="icon-btn topbar__menu" aria-label="Menu" aria-haspopup="dialog" onClick={onMenu}>
+          <MenuIcon />
         </button>
         <Logo />
         <div className="topbar__title">
@@ -80,9 +81,6 @@ export function Footer() {
   return (
     <footer className="footer">
       <span>Demo credits only · no cash value · 18+ only</span>
-      <span>
-        Play responsibly. South African Responsible Gambling helpline: <a href="tel:0800006008">0800 006 008</a>
-      </span>
     </footer>
   );
 }

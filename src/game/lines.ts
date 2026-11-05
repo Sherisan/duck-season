@@ -4,4 +4,7 @@ export const LINES = {
   miss: 'Blast! Missed!',
   missAgain: 'Blast it, again!',
   cashout: 'Confound it!',
+  faint: 'Ha! Out of puff!',
+  croc: 'Good heavens, a crocodile!',
+  stolen: 'I say! That was my duck!',
 } as const;

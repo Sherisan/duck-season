@@ -1,11 +1,19 @@
 import {
+  AIR_REFILL_SECONDS,
+  AIR_SECONDS,
+  CROC_CALM_SECONDS,
+  CROC_LINE,
+  CROC_SECONDS,
   DUCK_SPEED,
   DUCK_START,
   HOLD_MS,
   MAX_MULT,
+  MIN_BET,
+  MIN_CASHOUT,
   SKY,
   START_BALANCE,
   WAIT_MS,
+  airLine,
   duckPosition,
   multiplierAt,
   SKY_OVER_HUNTER,
@@ -84,6 +92,10 @@ export class GameEngine {
       aimY: DUCK_START.y,
       steering: false,
       misses: [],
+      air: 1,
+      airLine: airLine(0),
+      croc: 1,
+      cause: 'shot',
       points: [],
       history: [],
       nonce: 0,
@@ -165,7 +177,7 @@ export class GameEngine {
     const a = parseAmount(sl.amountStr);
     if (a <= 0 || a > w.balance) return false;
     const tg = parseNum(sl.targetStr);
-    sl.bet = { amount: a, target: sl.cashOn && tg >= 1.01 ? tg : null, cashedAt: null, auto };
+    sl.bet = { amount: a, target: sl.cashOn && tg >= MIN_CASHOUT ? tg : null, cashedAt: null, auto };
     sl.result = null;
     w.balance -= a;
     w.stats.wagered += a;
@@ -232,6 +244,8 @@ export class GameEngine {
           aimY: DUCK_START.y,
           steering: false,
           misses: [],
+          air: 1,
+          croc: 1,
           now,
           cloudX,
         });
@@ -275,6 +289,21 @@ export class GameEngine {
         this.crash(round, Math.min(m, round.crash), t, now, cloudX, duckX, duckY);
         return;
       }
+      // steered up into the thin air of the night sky the duck runs out of breath, and faints
+      // if it stays too long; lower down it gets its breath back
+      const thin = this.pointer !== null && duckY < s.airLine;
+      const air = thin ? s.air - dts / AIR_SECONDS : Math.min(1, s.air + dts / AIR_REFILL_SECONDS);
+      if (air <= 0) {
+        this.crash(round, m, t, now, cloudX, duckX, duckY, 'faint');
+        return;
+      }
+      // steered low over the lake, the duck tempts the crocodile, which lunges if it lingers
+      const low = this.pointer !== null && duckY > CROC_LINE;
+      const croc = low ? s.croc - dts / CROC_SECONDS : Math.min(1, s.croc + dts / CROC_CALM_SECONDS);
+      if (croc <= 0) {
+        this.crash(round, m, t, now, cloudX, duckX, duckY, 'croc');
+        return;
+      }
       // before it, his shots hit only if the duck is inside his sight ring
       let misses = s.misses;
       if (t >= this.nextShotT) {
@@ -295,7 +324,7 @@ export class GameEngine {
           this.applyCash(w, i, b.target, now);
         }
       }
-      const patch: Partial<GameState> = { ...(w ?? {}), mult: m, now, cloudX, duckX, duckY, duckVX, duckVY, aimX, aimY, misses };
+      const patch: Partial<GameState> = { ...(w ?? {}), mult: m, now, cloudX, duckX, duckY, duckVX, duckVY, aimX, aimY, misses, air, croc };
       const last = s.points[s.points.length - 1];
       if (!last || t - last.t > 0.12) patch.points = [...s.points, { t, m, x: duckX, y: duckY }];
       this.set(patch);
@@ -310,8 +339,8 @@ export class GameEngine {
     this.set({ now, cloudX });
   }
 
-  /** The duck is hit at multiplier m, at (x, y). */
-  private crash(round: RoundResult, m: number, t: number, now: number, cloudX: number, x: number, y: number) {
+  /** The duck is hit (or faints) at multiplier m, at (x, y). */
+  private crash(round: RoundResult, m: number, t: number, now: number, cloudX: number, x: number, y: number, cause: GameState['cause'] = 'shot') {
     const s = this.state;
     const w = this.work();
     w.slots.forEach((sl, i) => {
@@ -322,7 +351,15 @@ export class GameEngine {
         w.stats.rounds += 1;
         w.stats.profit -= a;
         if (sl.bet.auto) w.lim.net -= a;
-        sl.result = { win: false, text: `Bet ${i + 1} shot down at ${fmtX(m)}. Bet lost.` };
+        sl.result = {
+          win: false,
+          text:
+            cause === 'faint'
+              ? `Bet ${i + 1}: out of air at ${fmtX(m)}. Bet lost.`
+              : cause === 'croc'
+                ? `Bet ${i + 1}: snapped up by the croc at ${fmtX(m)}. Bet lost.`
+                : `Bet ${i + 1} shot down at ${fmtX(m)}. Bet lost.`,
+        };
       }
     });
     this.pointer = null;
@@ -330,6 +367,7 @@ export class GameEngine {
     this.set({
       ...w,
       phase: 'crashed',
+      cause,
       mult: m,
       crashAt: now,
       crashX: x,
@@ -406,12 +444,18 @@ export class GameEngine {
 
   // ---- player actions -------------------------------------------------------------
 
-  /** Steer the flying duck towards a point in scene coordinates. */
-  steer(x: number, y: number) {
+  /**
+   * Steer the flying duck towards a point in scene coordinates. `view` is the part of the scene on
+   * screen (phones show sky above it and crop its sides), so the duck can climb to just below its
+   * top and never leaves it; `air` is where the thin air starts, if the stage places it.
+   */
+  steer(x: number, y: number, view: { top: number; left: number; right: number; air?: number } = { top: 0, left: 0, right: 1000 }) {
     if (this.state.phase !== 'flying') return;
-    const px = clamp(x, SKY.minX, SKY.maxX);
+    const line = view.air ?? airLine(view.top);
+    if (Math.abs(line - this.state.airLine) > 1) this.set({ airLine: line });
+    const px = clamp(x, Math.max(SKY.minX, view.left + SKY.minX), Math.min(SKY.maxX, view.right - (1000 - SKY.maxX)));
     const maxY = px < SKY_OVER_HUNTER.maxX ? SKY_OVER_HUNTER.maxY : SKY.maxY;
-    this.pointer = { x: px, y: clamp(y, SKY.minY, maxY) };
+    this.pointer = { x: px, y: clamp(y, Math.min(view.top + SKY.minY, maxY), maxY) };
     if (!this.state.steering) this.set({ steering: true });
   }
 
@@ -420,8 +464,8 @@ export class GameEngine {
   }
 
   setAmount(i: number, v: number) {
-    const cap = Math.max(0.1, this.state.balance);
-    const val = Math.max(0.1, Math.min(Math.round(v * 100) / 100, cap));
+    const cap = Math.max(MIN_BET, this.state.balance);
+    const val = Math.max(MIN_BET, Math.min(Math.round(v * 100) / 100, cap));
     this.patchSlot(i, { amountStr: fmt(val) });
   }
 

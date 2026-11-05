@@ -21,9 +21,40 @@ function Icon({ size = 20, children, ...rest }: P) {
   );
 }
 
-export const BackIcon = (p: P) => (
+export const MenuIcon = (p: P) => (
   <Icon {...p}>
-    <path d="M15 5l-7 7 7 7" />
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </Icon>
+);
+export const TicketIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z" />
+    <path d="M14 6v12" strokeDasharray="2 2.4" />
+  </Icon>
+);
+export const BookIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5z" />
+    <path d="M12 6.5v13" />
+  </Icon>
+);
+export const RulesIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="5" y="4" width="14" height="17" rx="2" />
+    <path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3" />
+  </Icon>
+);
+export const ShieldIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M12 3l7 3v6c0 4.2-3 7.6-7 9-4-1.4-7-4.8-7-9V6z" />
+    <path d="M9 12l2 2 4-4" />
+  </Icon>
+);
+export const LimitsIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 17a8 8 0 1 1 16 0" />
+    <path d="M12 17l4-5" />
+    <path d="M4 17h2M18 17h2M12 9V8" />
   </Icon>
 );
 export const PrevIcon = (p: P) => (
@@ -56,25 +87,12 @@ export const HelpIcon = (p: P) => (
     <path d="M12 17h.01" />
   </Icon>
 );
-export const HistoryIcon = (p: P) => (
-  <Icon {...p}>
-    <path d="M3 12a9 9 0 1 0 3-6.7" />
-    <path d="M3 4v4.5h4.5" />
-    <path d="M12 7.5V12l3 2" />
-  </Icon>
-);
 export const AutoIcon = (p: P) => (
   <Icon {...p}>
     <path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5" />
     <path d="M20 4v4.5h-4.5" />
     <path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.5" />
     <path d="M4 20v-4.5h4.5" />
-  </Icon>
-);
-export const ShieldIcon = (p: P) => (
-  <Icon {...p}>
-    <path d="M12 3l7 3v6c0 4.2-3 7.6-7 9-4-1.4-7-4.8-7-9V6z" />
-    <path d="M9 12l2 2 4-4" />
   </Icon>
 );
 export const CloseIcon = (p: P) => (

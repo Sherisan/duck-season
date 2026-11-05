@@ -107,6 +107,13 @@ export interface GameState {
   steering: boolean;
   /** Shots he has missed this round, latest last. */
   misses: Miss[];
+  /** The duck's air, 1 = full; it drains above `airLine` while the player steers it there. */
+  air: number;
+  airLine: number;
+  /** The crocodile's patience, 1 = calm; it runs down while the steered duck flies low over the lake. */
+  croc: number;
+  /** How the round ended: shot down, fainted from lack of air, or snapped up by the crocodile. */
+  cause: 'shot' | 'faint' | 'croc';
   points: FlightPoint[];
   history: number[];
   nonce: number;

@@ -146,88 +146,9 @@
 
 /* ---- overlays ------------------------------------------------------------------ */
 
-.stage__top {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  right: 14px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.stage__icon {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-pill);
-  display: grid;
-  place-items: center;
-  background: rgba(7, 9, 13, 0.6);
-  border: 1px solid var(--line);
-  color: var(--soft);
-}
-
-.stage__history {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  gap: 6px;
-  overflow: hidden;
-  mask-image: linear-gradient(90deg, #000 85%, transparent);
-}
-
-.stage__hint {
-  font-size: 12px;
-  color: var(--soft);
-}
-
-.pill {
-  flex: none;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  border: 1px solid;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 13px;
-  backdrop-filter: blur(4px);
-}
-
-.pill--low {
-  color: #ff8d82;
-  border-color: rgba(255, 106, 92, 0.45);
-  background: rgba(40, 10, 10, 0.55);
-}
-
-.pill--mid {
-  color: var(--gold-2);
-  border-color: rgba(217, 180, 90, 0.45);
-  background: rgba(30, 24, 10, 0.6);
-}
-
-.pill--high {
-  color: var(--win-2);
-  border-color: rgba(63, 214, 138, 0.5);
-  background: rgba(6, 36, 22, 0.6);
-}
-
-.stage__round {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: var(--radius-pill);
-  background: rgba(7, 9, 13, 0.6);
-  border: 1px solid var(--line);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--soft);
-}
-
 .stage__center {
   position: absolute;
-  top: 13%;
+  top: 14px;
   left: 0;
   right: 0;
   display: flex;
@@ -447,25 +368,8 @@
     width: calc(100% - 12px);
     height: calc(100% - 12px);
   }
-  .stage__round {
-    display: none;
-  }
-  .stage__top {
-    top: 10px;
-    left: 10px;
-    right: 10px;
-  }
-  .stage__icon {
-    width: 26px;
-    height: 26px;
-  }
-  .pill {
-    padding: 3px 8px;
-    font-size: 12px;
-  }
-  /* below the round results, so the two never overlap */
   .stage__center {
-    top: 46px;
+    top: 8px;
     gap: 3px;
   }
   .gauge {
@@ -485,6 +389,32 @@
   }
 }
 
+/*
+ * phones: the stage runs edge to edge and shows the whole width of the scene and near shore
+ * (see Stage), with a band of sky above for the read-outs
+ */
+@media (max-width: 560px) {
+  .stage {
+    width: auto;
+    margin-inline: calc(-1 * var(--shell-pad));
+    min-height: calc(95vw + 140px);
+    border-radius: 0;
+    border-inline: 0;
+  }
+  .stage__svg {
+    inset: 12px;
+    width: calc(100% - 24px);
+    height: calc(100% - 24px);
+  }
+}
+
+/* laptops and desktops: the stage takes the width it is given, but stays within the window's height */
+@media (min-width: 900px) {
+  .stage {
+    max-height: calc(100vh - 120px);
+  }
+}
+
 /* ---- steering and misses ---------------------------------------------------------- */
 
 .stage--steer {
@@ -501,6 +431,49 @@
   stroke: rgba(5, 8, 16, 0.7);
   stroke-width: 4px;
   paint-order: stroke;
+}
+
+.air-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  fill: #cfe8ff;
+}
+
+.croc-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  fill: #c8f0b4;
+}
+
+/* the duck's oxygen (or the croc's patience), shown at the start of the read-out line */
+.air-meter {
+  display: inline-block;
+  vertical-align: middle;
+  width: 46px;
+  height: 7px;
+  margin: -2px 7px 0 0;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(5, 8, 16, 0.6);
+}
+
+.air-meter i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.air-low {
+  animation: air-blink 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes air-blink {
+  to {
+    opacity: 0.45;
+  }
 }
 
 .windmill-sails {

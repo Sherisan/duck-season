@@ -2,7 +2,7 @@ import { memo, useId } from 'react';
 
 /*
  * The marsh at dusk, split into layers so the stage can slot the duck and the
- * hunter between them. All layers share the viewBox 0 0 1000 560.
+ * hunter between them. All layers share the viewBox 0 0 1000 560 (phones add a near shore below, to y 680).
  */
 
 /** Deterministic star field: denser and brighter high up, thinning towards the horizon. */
@@ -25,10 +25,11 @@ const STARS = (() => {
 const HIGH_STARS = (() => {
   let seed = 31;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-  return Array.from({ length: 60 }, () => ({ x: rnd() * 1000, y: -rnd() * 380, r: 0.5 + rnd() * 1.2, o: 0.4 + rnd() * 0.5 }));
+  return Array.from({ length: 140 }, () => ({ x: rnd() * 1000, y: -rnd() * 880, r: 0.5 + rnd() * 1.2, o: 0.4 + rnd() * 0.5 }));
 })();
 
-export const SceneSky = memo(function SceneSky() {
+/** The sky; `top` is where its gradient starts (above 0 on phones, which show sky above the frame). */
+export const SceneSky = memo(function SceneSky({ top = 0 }: { top?: number }) {
   const id = useId().replace(/:/g, '');
   const u = (n: string) => `url(#${id}-${n})`;
   return (
@@ -74,9 +75,10 @@ export const SceneSky = memo(function SceneSky() {
         </linearGradient>
       </defs>
 
-      <rect width="1000" height="560" fill={u('sky')} />
       {/* night sky continuing above the frame, shown when a tall (phone) stage fits the scene to its width */}
-      <rect y="-400" width="1000" height="401" fill="#040817" />
+      <rect y="-900" width="1000" height="901" fill="#040817" />
+      {/* the dusk gradient, which on phones stretches up to the top of the stage */}
+      <rect y={top} width="1000" height={560 - top} fill={u('sky')} />
       <g fill="#fff">
         {HIGH_STARS.map((st, i) => (
           <circle key={i} cx={st.x.toFixed(1)} cy={st.y.toFixed(1)} r={st.r.toFixed(2)} opacity={st.o.toFixed(2)} />
@@ -792,6 +794,109 @@ export const SceneForeground = memo(function SceneForeground() {
         <rect x="973" y="462" width="10" height="26" rx="5" />
       </g>
       <path d="M38 446 V468 M313 490 V508 M368 500 V516" stroke="#ffb070" strokeWidth="1.2" strokeLinecap="round" opacity=".25" />
+    </g>
+  );
+});
+
+/* ---- the near shore (phones) ------------------------------------------------------ */
+
+/** Top edge of the near shore, as three cubic segments [x0 y0 x1 y1 x2 y2 x3 y3]. */
+const NEAR_SEGS = [
+  [0, 594, 140, 586, 280, 584, 420, 590],
+  [420, 590, 540, 595, 660, 598, 780, 592],
+  [780, 592, 880, 587, 950, 584, 1000, 588],
+];
+const NEAR_TOP = `M0 594 ${NEAR_SEGS.map((s) => `C${s.slice(2).join(' ')}`).join(' ')}`;
+
+/** Grass blades along the near shore's top edge, grouped into three shades. */
+const NEAR_GRASS = (() => {
+  const r = rng(23);
+  const paths = ['', '', ''];
+  let k = 0;
+  for (const [x0, y0, x1, y1, x2, y2, x3, y3] of NEAR_SEGS) {
+    for (let i = 0; i < 60; i++) {
+      const t = i / 60;
+      const x = cubic(t, x0, x1, x2, x3);
+      const y = cubic(t, y0, y1, y2, y3) + 3;
+      const h = 6 + r() * 10;
+      const lean = (r() - 0.5) * 9;
+      paths[k++ % 3] += `M${x.toFixed(1)} ${y.toFixed(1)}q${(lean / 2).toFixed(1)} ${(-h / 2).toFixed(1)} ${lean.toFixed(1)} ${(-h).toFixed(1)}`;
+    }
+  }
+  return paths;
+})();
+
+const NEAR_FLOWERS: [Bloom, number, number, number][] = [
+  ['daisy', 70, 592, 1],
+  ['poppy', 128, 590, 1.1],
+  ['daisy', 196, 588, 0.9],
+  ['lavender', 470, 596, 1],
+  ['daisy', 540, 600, 1],
+  ['poppy', 612, 602, 1.1],
+  ['daisy', 700, 600, 0.9],
+  ['poppy', 842, 594, 1],
+];
+
+/**
+ * Phones only: the lake and the hunter's bank carry on towards us down to a near shore, which
+ * gives the altitude gauge its own strip of ground below the scene (y 560–680).
+ */
+export const SceneNearShore = memo(function SceneNearShore() {
+  const id = useId().replace(/:/g, '');
+  return (
+    <g>
+      <defs>
+        <linearGradient id={`${id}-near`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#1c2616" />
+          <stop offset=".3" stopColor="#10160c" />
+          <stop offset="1" stopColor="#060807" />
+        </linearGradient>
+      </defs>
+
+      {/* the lake, darkening as it comes towards us, with a few ripples and lily pads */}
+      <rect x="0" y="559" width="1000" height="50" fill="#080a14" />
+      <g stroke="#b9a6d8" strokeLinecap="round" opacity=".16" fill="none">
+        <path d="M470 572 q14 -3 28 0 q14 3 28 0" />
+        <path d="M660 578 q16 -3 32 0 q16 3 32 0" />
+        <path d="M800 568 q12 -3 24 0 q12 3 24 0" />
+      </g>
+      <Lily x={590} y={576} s={0.9} />
+      <Lily x={760} y={582} s={0.8} flower />
+
+      {/* the hunter's bank running on down to the near shore */}
+      <path d="M0 559 H392 C412 568 428 580 452 592 L0 600 Z" fill="#0b0e0a" />
+
+      {/* the near shore, in shadow, with grass, wildflowers and stones along its edge */}
+      <path d={`${NEAR_TOP} L1000 690 L0 690 Z`} fill={`url(#${id}-near)`} />
+      <path d={NEAR_TOP} stroke="#3a4d2e" strokeWidth="2" fill="none" />
+      <g strokeWidth="1.6" strokeLinecap="round" fill="none">
+        <path d={NEAR_GRASS[0]} stroke="#3e5232" />
+        <path d={NEAR_GRASS[1]} stroke="#55703f" />
+        <path d={NEAR_GRASS[2]} stroke="#26331f" />
+      </g>
+      <g fill="#24222b">
+        <ellipse cx="300" cy="600" rx="9" ry="4" />
+        <ellipse cx="313" cy="603" rx="5" ry="2.6" fill="#33303a" />
+        <ellipse cx="900" cy="597" rx="8" ry="3.6" />
+      </g>
+      {NEAR_FLOWERS.map(([kind, x, y, s], i) => (
+        <Flower key={i} kind={kind} x={x} y={y} s={s} />
+      ))}
+
+      {/* dark reeds growing up from the near shore at the corners of the shot */}
+      <g fill="#07090d">
+        <path d="M30 600 C26 576 14 562 -4 554 C16 558 34 574 40 600 Z" />
+        <path d="M820 596 C826 574 840 560 858 552 C842 566 832 580 830 596 Z" />
+        <path d="M874 594 C870 572 858 558 842 552 C860 556 876 572 882 594 Z" />
+      </g>
+      <g stroke="#07090d" strokeLinecap="round" fill="none">
+        <path d="M14 600 C18 570 10 552 22 530" strokeWidth="4" />
+        <path d="M848 596 C852 566 844 548 856 520" strokeWidth="4.5" />
+        <path d="M864 594 C860 570 870 554 866 534" strokeWidth="4" />
+      </g>
+      <g fill="#1c120a">
+        <rect x="851" y="512" width="10" height="26" rx="5" />
+      </g>
     </g>
   );
 });

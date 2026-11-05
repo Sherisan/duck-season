@@ -1,6 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { GameEngine } from './GameEngine';
-import { splashDelay } from './engine';
+import { CROC_LEAP_START, CROC_LEAP_TIME, HUNTER_SCALE, HUNTER_SCALE_WIDE, fallTime, splashDelay } from './engine';
 import { LocalDemoProvider } from './fairness';
 import { LINES } from './lines';
 import { SoundFx } from './sound';
@@ -21,8 +21,25 @@ export function useEngine(): GameHandle {
       launch: () => sfx.launch(),
       crash: () => {
         const st = engine.getSnapshot();
-        sfx.crash(splashDelay(st.crashX, st.crashY));
-        sfx.say(LINES.hit, 0.25);
+        if (st.cause === 'croc') {
+          sfx.croc();
+          sfx.say(LINES.croc, 0.35);
+          return;
+        }
+        // the hunter is drawn larger on phones (see Stage), which changes the line of the shot
+        const k = window.matchMedia('(max-width: 560px)').matches ? HUNTER_SCALE : HUNTER_SCALE_WIDE;
+        const landIn = st.cause === 'faint' ? fallTime(st.crashY, 0) : splashDelay(st.crashX, st.crashY, k);
+        if (st.cause === 'faint') {
+          sfx.faint(landIn);
+          sfx.say(LINES.faint, 0.3);
+        } else {
+          sfx.crash(landIn);
+          sfx.say(LINES.hit, 0.25);
+        }
+        // then the croc leaps out of the lake and takes the duck
+        const diveIn = landIn + CROC_LEAP_START + CROC_LEAP_TIME;
+        sfx.crocLeap(landIn + CROC_LEAP_START + 0.05, diveIn);
+        sfx.say(LINES.stolen, diveIn + 0.15);
       },
       miss: () => {
         sfx.miss();

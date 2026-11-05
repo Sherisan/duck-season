@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
 import { BetPanel } from './components/BetPanel';
+import { GameMenu } from './components/GameMenu';
 import { Footer, Header } from './components/Header';
 import { HowToPlay } from './components/HowToPlay';
-import { AutoPlayPanel, BetHistory, SessionStats } from './components/Sidebar';
+import { BetHistory } from './components/Sidebar';
 import { Stage } from './components/Stage';
 import { useEngine, useGameState } from './game/useGame';
 
@@ -11,11 +12,13 @@ export default function App() {
   const s = useGameState(engine);
   const [help, setHelp] = useState(false);
   const closeHelp = useCallback(() => setHelp(false), []);
+  const [menu, setMenu] = useState(false);
+  const closeMenu = useCallback(() => setMenu(false), []);
 
   return (
     <div className="app">
       <div className="shell">
-        <Header balance={s.balance} soundOn={s.soundOn} engine={engine} sfx={sfx} onHelp={() => setHelp(true)} />
+        <Header balance={s.balance} soundOn={s.soundOn} engine={engine} sfx={sfx} onHelp={() => setHelp(true)} onMenu={() => setMenu(true)} />
 
         <div className="layout">
           <main className="layout__main">
@@ -36,8 +39,6 @@ export default function App() {
                 <BetPanel key={i} index={i} s={s} engine={engine} />
               ))}
             </div>
-            <SessionStats stats={s.stats} />
-            <AutoPlayPanel s={s} engine={engine} />
             <BetHistory rows={s.rows} />
           </aside>
         </div>
@@ -45,6 +46,7 @@ export default function App() {
         <Footer />
       </div>
       {help && <HowToPlay onClose={closeHelp} />}
+      {menu && <GameMenu s={s} onClose={closeMenu} />}
     </div>
   );
 }

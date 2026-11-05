@@ -9,9 +9,10 @@
 }
 
 .shell {
-  max-width: 1408px;
+  --shell-pad: var(--space-3);
+  max-width: 1920px;
   margin: 0 auto;
-  padding: var(--space-3);
+  padding: var(--shell-pad);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -20,7 +21,7 @@
 .layout {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: 12px;
   align-items: flex-start;
 }
 
@@ -33,7 +34,7 @@
 }
 
 .layout__side {
-  flex: 1 1 320px;
+  flex: 1 1 300px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -760,6 +761,74 @@
   background: rgba(63, 214, 138, 0.06);
 }
 
+/* auto play settings, opened inside the bet panel from its Auto toggle */
+.auto-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px 8px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(108, 196, 255, 0.24);
+  background: rgba(108, 196, 255, 0.06);
+}
+
+.auto-row__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.auto-row__head .label {
+  color: #cfeaff;
+}
+
+.auto-row__status {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.auto-row__rounds {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auto-row__rounds .segmented {
+  flex: 1;
+}
+
+.auto-row__field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.auto-row .input {
+  height: 28px;
+}
+
+.auto-row__go {
+  height: 32px;
+  font-size: 13px;
+}
+
+.btn-auto {
+  border-radius: 10px;
+  border: 1px solid rgba(108, 196, 255, 0.6);
+  background: linear-gradient(180deg, #2f78b0, #1b4a73);
+  color: #eef8ff;
+  font: 800 13px var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: filter 0.15s;
+}
+
+.btn-auto:hover {
+  filter: brightness(1.1);
+}
+
 .cashout-row {
   display: flex;
   align-items: center;
@@ -874,30 +943,6 @@
   font-size: 11px;
   font-weight: 600;
   color: var(--muted);
-}
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: var(--line);
-}
-
-.stat {
-  padding: 5px 10px;
-  background: var(--surface);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.stat__value {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 14px;
 }
 
 .segmented {
@@ -1087,38 +1132,410 @@
   flex: none;
 }
 
+/* ---- burger menu ------------------------------------------------------------------ */
+
+.topbar__menu {
+  color: var(--game);
+  border-color: rgba(108, 196, 255, 0.45);
+  box-shadow: 0 0 16px -6px rgba(108, 196, 255, 0.6);
+}
+
+.topbar__menu:hover {
+  border-color: var(--game);
+}
+
+.drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(3, 4, 8, 0.6);
+  backdrop-filter: blur(3px);
+  animation: fade-in 0.15s ease-out both;
+}
+
+.drawer__card {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 10px;
+  width: min(340px, calc(100% - 20px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line-2);
+  border-top: 2px solid var(--game);
+  background:
+    radial-gradient(120% 60% at 0% 0%, rgba(108, 196, 255, 0.1), transparent 60%),
+    var(--grad-panel);
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.9);
+  animation: drawer-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+.drawer__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 12px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.drawer__head h2 {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.drawer__back {
+  margin-left: -8px;
+}
+
+.drawer__back,
+.drawer__close {
+  width: 34px;
+  height: 34px;
+}
+
+.drawer__body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line-soft);
+}
+
+.menu-item__icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tone) 30%, transparent);
+}
+
+.menu-item__label {
+  flex: 1;
+}
+
+.menu-item__chev {
+  color: var(--muted);
+}
+
+.menu-note {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--soft);
+}
+
+.rules {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--soft);
+}
+
+.rules li::marker {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--gold-2);
+}
+
+.limits {
+  margin: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.limits__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 12px;
+  background: var(--surface);
+}
+
+.limits__row + .limits__row {
+  border-top: 1px solid var(--line-soft);
+}
+
+.limits dt {
+  font-size: 13px;
+  color: var(--soft);
+}
+
+.limits dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  text-align: right;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-28px);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
 @media (max-width: 560px) {
+  .shell {
+    --shell-pad: 10px;
+  }
+  /*
+   * phones: one slim row, menu and title on the left, balance, help and sound on the right; the
+   * title grows to fill the space the row leaves it (the logo is dropped to give it room)
+   */
+  .topbar {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 14px;
+  }
+  .topbar__left {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .topbar__menu {
+    width: 30px;
+    height: 30px;
+  }
+  .topbar__menu svg {
+    width: 17px;
+    height: 17px;
+  }
+  .topbar__left > svg {
+    display: none;
+  }
+  .topbar__title {
+    min-width: 0;
+  }
+  .topbar__title h1,
+  .topbar .kicker {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
   .topbar__title h1 {
-    font-size: 24px;
+    font-size: clamp(14px, calc(14.2vw - 36.5px), 20px);
+    line-height: 1.05;
+  }
+  .topbar .kicker {
+    font-size: clamp(6px, calc(5.6vw - 14.4px), 8.5px);
+    letter-spacing: 0.08em;
   }
   .topbar__tags,
   .topbar .nav-btn {
     display: none;
   }
   .topbar__right {
-    width: 100%;
+    flex: none;
+    flex-wrap: nowrap;
+    gap: 5px;
+  }
+  .topbar__right .icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+  .topbar__right .icon-btn svg {
+    width: 16px;
+    height: 16px;
   }
   .balance {
-    flex: 1;
+    height: 30px;
+    gap: 5px;
+    padding: 0 9px 0 5px;
+  }
+  .balance > svg {
+    width: 18px;
+    height: 18px;
+  }
+  .balance__text {
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .balance__value {
+    font-size: 13.5px;
+  }
+  .balance__unit {
+    font-size: 8px;
+  }
+  .balance .btn-ghost--sm {
+    height: 22px;
+    padding: 0 8px;
+    font-size: 11px;
   }
   .big-btn {
     min-height: 52px;
   }
 }
 
-/* phones: the bet button sits beside the stake and chips, so each panel is shorter */
-@media (min-width: 350px) and (max-width: 560px) {
-  .bet-panel__body {
+/* the narrowest phones: a tighter right side so the title keeps as much room as it can */
+@media (max-width: 380px) {
+  .topbar__right {
+    gap: 4px;
+  }
+  .topbar__right .icon-btn {
+    width: 28px;
+    height: 28px;
+  }
+  .balance {
+    padding: 0 7px 0 4px;
+  }
+}
+
+/*
+ * phones: each bet panel is two slim rows (stake, then name and toggles) with the bet button
+ * beside both; the chips are dropped, and the state shows as a coloured dot
+ */
+@media (max-width: 560px) {
+  .bet-panel {
+    display: grid;
+    grid-template-columns: auto 1fr 40%;
+    grid-template-areas:
+      'amount amount btn'
+      'title toggles btn';
+    gap: 4px 6px;
+    padding: 4px 5px 4px 12px;
+  }
+  .bet-panel::before {
+    left: 4px;
+    top: 6px;
+    bottom: 6px;
+  }
+  .bet-panel__head,
+  .bet-panel__body,
+  .bet-panel__controls {
+    display: contents;
+  }
+  .bet-panel__title {
+    grid-area: title;
+  }
+  .bet-panel__shells,
+  .toggle svg,
+  .chips {
+    display: none;
+  }
+  .bet-panel__name {
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+  }
+  .bet-panel__label {
+    font-size: 11px;
+  }
+  .bet-panel__state {
+    font-size: 0;
+    gap: 0;
+  }
+  .bet-panel__toggles {
+    grid-area: toggles;
     flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+  .toggle {
+    height: 20px;
+    padding: 0 6px 0 7px;
+    font-size: 10px;
+  }
+  .amount {
+    grid-area: amount;
+    height: 28px;
+    gap: 6px;
+    padding: 2px 2px 2px 7px;
+    border-radius: 8px;
+  }
+  .amount > svg {
+    width: 16px;
+    height: 16px;
+  }
+  .amount__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .amount__input {
+    height: 18px;
+    font-size: 15px;
+  }
+  .amount__steps {
+    border-radius: 6px;
+  }
+  .step {
+    width: 28px;
   }
   .bet-panel__body .big-btn {
-    flex: 0 0 108px;
-    padding: 6px 8px 9px;
+    grid-area: btn;
+    min-height: 0;
+    padding: 3px 6px 5px;
+    border-radius: 9px;
   }
   .bet-panel__body .big-btn__label {
-    font-size: 14px;
+    font-size: 13px;
   }
-  .chips {
-    gap: 2px;
+  .bet-panel__body .big-btn__sub {
+    padding: 0 5px;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+  .bet-panel .cashout-row,
+  .bet-panel .auto-row {
+    grid-column: 1 / -1;
   }
 }

@@ -5,6 +5,9 @@ export const HOLD_MS = 3400;
 export const GROWTH = 0.11;
 export const HOUSE_EDGE = 0.01;
 export const MAX_MULT = 10000;
+/** Smallest stake, and the lowest auto cash-out target. */
+export const MIN_BET = 0.1;
+export const MIN_CASHOUT = 1.01;
 export const START_BALANCE = 10000;
 
 /** Multiplier after t seconds of flight (floored to 2 decimals). */
@@ -37,29 +40,37 @@ export function duckPosition(m: number, t: number): { x: number; y: number } {
   return { x: DUCK_START.x + p * 350, y: DUCK_START.y - 16 - p * 332 + Math.sin(t * 4.2) * 6 };
 }
 
-/** Hunter size on stage (1 = as drawn). He scales around his feet so he stays on the bank. */
-export const HUNTER_SCALE = 0.75;
+/**
+ * Hunter size on stage (1 = as drawn): larger on phones, which draw the whole scene small, than
+ * on wider screens. He scales around his feet so he stays on the bank.
+ */
+export const HUNTER_SCALE = 0.975;
+export const HUNTER_SCALE_WIDE = 0.72;
 export const HUNTER_FEET = { x: 182, y: 547 };
 /** Sideways nudge for the hunter after scaling (negative = left). */
 export const HUNTER_SHIFT = -90;
 
-/** SVG transform that places art/Hunter.tsx (drawn at full size) on the stage. */
-export const HUNTER_TRANSFORM = `translate(${HUNTER_FEET.x + HUNTER_SHIFT} ${HUNTER_FEET.y}) scale(${HUNTER_SCALE}) translate(${-HUNTER_FEET.x} ${-HUNTER_FEET.y})`;
+/** SVG transform that places art/Hunter.tsx (drawn at full size) on the stage at size k. */
+export function hunterTransform(k = HUNTER_SCALE): string {
+  return `translate(${HUNTER_FEET.x + HUNTER_SHIFT} ${HUNTER_FEET.y}) scale(${k}) translate(${-HUNTER_FEET.x} ${-HUNTER_FEET.y})`;
+}
 
-/** A point in the hunter's own drawing, in scene coordinates. */
-function hunterToScene(x: number, y: number) {
-  return { x: HUNTER_FEET.x + HUNTER_SHIFT + (x - HUNTER_FEET.x) * HUNTER_SCALE, y: HUNTER_FEET.y + (y - HUNTER_FEET.y) * HUNTER_SCALE };
+/** A point in the hunter's own drawing, in scene coordinates, with him at size k. */
+function hunterToScene(x: number, y: number, k: number) {
+  return { x: HUNTER_FEET.x + HUNTER_SHIFT + (x - HUNTER_FEET.x) * k, y: HUNTER_FEET.y + (y - HUNTER_FEET.y) * k };
 }
 
 /** The rotate() pivot in art/Hunter.tsx (205, 372), in scene coordinates. */
-export const GUN_PIVOT = hunterToScene(205, 372);
+function gunPivot(k: number) {
+  return hunterToScene(205, 372, k);
+}
 
 /** Muzzle tip in scene coordinates for a gun angle (art/Hunter.tsx draws it at (450, 365) before aiming). */
-export function muzzlePosition(aimDeg: number): { x: number; y: number } {
+export function muzzlePosition(aimDeg: number, k = HUNTER_SCALE): { x: number; y: number } {
   const a = (aimDeg * Math.PI) / 180;
   const vx = 450 - 205;
   const vy = 365 - 372;
-  return hunterToScene(205 + vx * Math.cos(a) - vy * Math.sin(a), 372 + vx * Math.sin(a) + vy * Math.cos(a));
+  return hunterToScene(205 + vx * Math.cos(a) - vy * Math.sin(a), 372 + vx * Math.sin(a) + vy * Math.cos(a), k);
 }
 
 /** Radius of the hunter's inner sight ring at multiplier m. The duck is hit if it is inside it when he fires. */
@@ -96,13 +107,35 @@ export function shotRandom(serverSeed: string, nonce: number): () => number {
 
 /** Where the player can steer the duck: open sky, clear of the water, and above the hunter's hat on the left. */
 export const SKY = { minX: 40, maxX: 960, minY: 60, maxY: 440 };
-export const SKY_OVER_HUNTER = { maxX: 340, maxY: 250 };
+export const SKY_OVER_HUNTER = { maxX: 380, maxY: 190 };
+
+/** Seconds the steered duck can stay low over the lake before the crocodile gets it, and to calm it. */
+export const CROC_SECONDS = 0.75;
+export const CROC_CALM_SECONDS = 1.5;
+/** After a shot or fainted duck lands in the lake, the croc leaps for it: when (s after the splash) and how long in the air. */
+export const CROC_LEAP_START = 0.25;
+export const CROC_LEAP_TIME = 0.8;
+/** Scene y below which the duck is close enough to the water for the crocodile. */
+export const CROC_LINE = 380;
+
+/** Seconds of air the steered duck has in the thin air of the night sky, and to fully recover below it. */
+export const AIR_SECONDS = 5;
+export const AIR_REFILL_SECONDS = 2;
+
+/**
+ * Scene y below which the air is fine: the bottom of the dark night band at the top of the sky
+ * (the sky gradient's first stop), where `top` is the top of the visible sky.
+ */
+export function airLine(top: number): number {
+  return top + 0.22 * (560 - top);
+}
 /** Top speed of the steered duck, in scene units per second. */
 export const DUCK_SPEED = 620;
 
 /** Gun angle in degrees for a target point, clamped to a natural range. */
-export function aimAngle(x: number, y: number): number {
-  const a = (Math.atan2(y - GUN_PIVOT.y, x - GUN_PIVOT.x) * 180) / Math.PI;
+export function aimAngle(x: number, y: number, k = HUNTER_SCALE): number {
+  const pivot = gunPivot(k);
+  const a = (Math.atan2(y - pivot.y, x - pivot.x) * 180) / Math.PI;
   return Math.max(-58, Math.min(-4, a));
 }
 
@@ -130,8 +163,8 @@ export function fallTime(cy: number, uy: number): number {
 }
 
 /** Seconds from the shot until a duck hit at (x, y) splashes into the lake. */
-export function splashDelay(x: number, y: number): number {
-  const mz = muzzlePosition(aimAngle(x, y));
+export function splashDelay(x: number, y: number, k = HUNTER_SCALE): number {
+  const mz = muzzlePosition(aimAngle(x, y, k), k);
   const uy = (y - mz.y) / (Math.hypot(x - mz.x, y - mz.y) || 1);
   return SHOT_TRAVEL + fallTime(y, uy);
 }

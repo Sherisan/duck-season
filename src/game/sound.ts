@@ -222,6 +222,39 @@ export class SoundFx {
     this.reload(t + 1.9);
   }
 
+  /** The duck faints from lack of air: a weak quack, a falling whistle, then the splash. */
+  faint(splashIn: number) {
+    const ctx = this.live();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.quack(t, 1);
+    this.fall(t + 0.15, Math.max(0.3, splashIn - 0.15));
+    this.splash(t + splashIn, 1);
+  }
+
+  /** The crocodile erupts from the lake, its jaws snap shut, and it drags the duck under. */
+  croc() {
+    const ctx = this.live();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.splash(t, 0.8);
+    this.quack(t + 0.08, 2);
+    this.click(t + 0.3, 420, 0.7);
+    this.noiseBurst(t + 0.3, 0.09, 0.55, 'lowpass', 380, 1, this.fx);
+    this.splash(t + 0.6, 1);
+  }
+
+  /** The croc leaps out of the lake (in `emergeIn` s) and comes down jaws-first on the duck (in `diveIn` s). */
+  crocLeap(emergeIn: number, diveIn: number) {
+    const ctx = this.live();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    this.splash(t + emergeIn, 0.7);
+    this.click(t + diveIn - 0.04, 420, 0.7);
+    this.noiseBurst(t + diveIn - 0.04, 0.09, 0.55, 'lowpass', 380, 1, this.fx);
+    this.splash(t + diveIn, 1.3);
+  }
+
   /** A player cashes out: coins. */
   cashout() {
     const ctx = this.live();
@@ -343,6 +376,23 @@ export class SoundFx {
     bp.frequency.exponentialRampToValueAtTime(1400, t + 0.25);
     const g = this.env(t, 0.01, 0.18, 0.26);
     src.connect(bp).connect(g).connect(this.fx);
+  }
+
+  /** A cartoon falling whistle that drops in pitch over `dur` seconds. */
+  private fall(t: number, dur: number) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1300, t);
+    osc.frequency.exponentialRampToValueAtTime(260, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09, t + 0.06);
+    g.gain.setValueAtTime(0.09, t + dur * 0.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g).connect(this.fx);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
   }
 
   /** He breaks the gun, the spent shells pop out and tinkle, and it snaps shut. */

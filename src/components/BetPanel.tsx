@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import { Chip, Coin, Shell } from '../art/Tokens';
-import { chanceFor } from '../game/engine';
+import { MIN_CASHOUT, chanceFor } from '../game/engine';
 import type { GameEngine } from '../game/GameEngine';
 import { fmt, fmtX, parseAmount, parseNum } from '../game/format';
-import type { GameState } from '../game/types';
+import type { GameState, RoundsOption } from '../game/types';
 import { AutoIcon, CashOutIcon, CrosshairIcon } from './icons';
 
 type Variant = 'gold' | 'win' | 'raised' | 'done';
@@ -17,9 +18,14 @@ interface ButtonState {
 type Tone = 'idle' | 'gold' | 'auto' | 'live' | 'win' | 'loss';
 
 const CHIPS = [10, 50, 100, 500];
+const ROUND_OPTIONS: RoundsOption[] = [10, 25, 50, 100, 'inf'];
 
 export function BetPanel({ index, s, engine }: { index: number; s: GameState; engine: GameEngine }) {
   const sl = s.slots[index];
+  // the Auto toggle opens this bet's auto play settings in the panel; the light shows it running
+  const [autoOpen, setAutoOpen] = useState(false);
+  const L = s.lim;
+  const autoStatus = L.active ? `${L.rounds === 'inf' ? '∞' : L.left} left · net ${L.net >= 0 ? '+' : ''}${fmt(L.net)}` : 'Off';
   const a = parseAmount(sl.amountStr);
   const b = sl.bet;
   const ph = s.phase;
@@ -46,7 +52,7 @@ export function BetPanel({ index, s, engine }: { index: number; s: GameState; en
   let status: { text: string; tone: Tone };
   if (live) status = { text: 'In flight', tone: 'live' };
   else if (b && b.cashedAt !== null) status = { text: `Collected at ${fmtX(b.cashedAt)}`, tone: 'win' };
-  else if (b && ph === 'crashed') status = { text: 'Shot down', tone: 'loss' };
+  else if (b && ph === 'crashed') status = { text: s.cause === 'faint' ? 'Out of air' : s.cause === 'croc' ? 'Snapped up' : 'Shot down', tone: 'loss' };
   else if (b) status = { text: 'Bet placed', tone: 'gold' };
   else if (sl.queued) status = { text: 'Queued for next round', tone: 'gold' };
   else if (sl.autoOn) status = { text: 'Auto bet on', tone: 'auto' };
@@ -54,7 +60,7 @@ export function BetPanel({ index, s, engine }: { index: number; s: GameState; en
 
   const tg = parseNum(sl.targetStr);
   const odds =
-    tg >= 1.01 ? `Chance ${chanceFor(tg).toFixed(1)}% · pays ${fmtX(tg)} · wins ${fmt(a * tg)}` : 'Enter 1.01× or more';
+    tg >= MIN_CASHOUT ? `Chance ${chanceFor(tg).toFixed(1)}% · pays ${fmtX(tg)} · wins ${fmt(a * tg)}` : `Enter ${fmtX(MIN_CASHOUT)} or more`;
 
   return (
     <section className={`bet-panel${live ? ' bet-panel--live' : ''}${sl.autoOn ? ' bet-panel--auto' : ''}`} aria-label={title}>
@@ -73,9 +79,10 @@ export function BetPanel({ index, s, engine }: { index: number; s: GameState; en
         <div className="bet-panel__toggles">
           <button
             className={`toggle${sl.autoOn ? ' is-on' : ''}`}
-            aria-pressed={sl.autoOn}
-            title="Auto bet"
-            onClick={() => engine.toggleAuto(index)}
+            aria-expanded={autoOpen}
+            aria-controls={`auto-${index}`}
+            title="Auto play"
+            onClick={() => setAutoOpen((o) => !o)}
           >
             <AutoIcon size={12} />
             Auto
@@ -135,6 +142,46 @@ export function BetPanel({ index, s, engine }: { index: number; s: GameState; en
           <span className="big-btn__sub num">{btn.sub}</span>
         </button>
       </div>
+
+      {autoOpen && (
+        <div className="auto-row" id={`auto-${index}`}>
+          <div className="auto-row__head">
+            <span className="label">Auto play</span>
+            <span className={`auto-row__status num${L.active ? ' text-win' : ''}`}>{autoStatus}</span>
+          </div>
+          <div className="auto-row__rounds">
+            <span className="label" id={`rounds-${index}`}>
+              Rounds
+            </span>
+            <div className="segmented" role="group" aria-labelledby={`rounds-${index}`}>
+              {ROUND_OPTIONS.map((r) => (
+                <button
+                  key={String(r)}
+                  className={`segmented__btn${L.rounds === r ? ' is-on' : ''}`}
+                  aria-pressed={L.rounds === r}
+                  disabled={L.active}
+                  onClick={() => engine.setRounds(r)}
+                >
+                  {r === 'inf' ? '∞' : r}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid-2">
+            <label className="auto-row__field">
+              <span className="label">Stop on profit</span>
+              <input className="input num" inputMode="decimal" placeholder="Off" value={L.profitStr} onChange={(e) => engine.setLimit('profitStr', e.target.value)} />
+            </label>
+            <label className="auto-row__field">
+              <span className="label">Stop on loss</span>
+              <input className="input num" inputMode="decimal" placeholder="Off" value={L.lossStr} onChange={(e) => engine.setLimit('lossStr', e.target.value)} />
+            </label>
+          </div>
+          <button className={`auto-row__go ${sl.autoOn ? 'btn-stop' : 'btn-auto'}`} onClick={() => engine.toggleAuto(index)}>
+            {sl.autoOn ? 'Stop auto play' : 'Start auto play'}
+          </button>
+        </div>
+      )}
 
       {sl.cashOn && (
         <div className="cashout-row">
