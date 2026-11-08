@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { AIR_SECONDS, CROC_SECONDS, HOLD_MS, HOUSE_EDGE, MAX_MULT, MIN_BET, MIN_CASHOUT, WAIT_MS } from '../game/engine';
+import { AIR_SECONDS, HOLD_MS, HOUSE_EDGE, MAX_MULT, MIN_BET, MIN_CASHOUT, WAIT_MS } from '../game/engine';
 import { verifyRound } from '../game/fairness';
 import { fmt, fmtX } from '../game/format';
 import type { GameState } from '../game/types';
@@ -27,7 +27,7 @@ const RULES = [
   'Sir Reginald fires at the duck every second or two. A shot hits only if the duck is inside his inner sight ring, so you can steer the duck to dodge.',
   "At the round's crash point, fixed by the seeds before it starts, he never misses.",
   `Fly too high, into the dark night sky above the thin-air line, and the duck runs short of air. It has ${AIR_SECONDS} seconds to come back down; if it runs out, it faints and falls, and that ends the round like a hit.`,
-  `Fly too low over the lake, below the croc-water mark, and a crocodile starts to stir. After ${CROC_SECONDS} seconds down there it leaps out and snaps the duck up, which also ends the round like a hit.`,
+  'When the duck falls into the lake, a crocodile leaps out of the water and takes it.',
   'Cash out before the duck is hit to win your stake × the multiplier at that moment. A bet still in the air when the duck is hit is lost.',
   `Auto cash-out collects for you at your chosen multiplier (${fmtX(MIN_CASHOUT)} or more). Auto bet repeats your bet each round until a limit in the Auto play panel is reached.`,
   `The game returns ${100 - HOUSE_EDGE * 100}% of stakes on average (a ${HOUSE_EDGE * 100}% house edge).`,

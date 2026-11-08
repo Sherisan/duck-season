@@ -52,7 +52,7 @@ export function BetPanel({ index, s, engine }: { index: number; s: GameState; en
   let status: { text: string; tone: Tone };
   if (live) status = { text: 'In flight', tone: 'live' };
   else if (b && b.cashedAt !== null) status = { text: `Collected at ${fmtX(b.cashedAt)}`, tone: 'win' };
-  else if (b && ph === 'crashed') status = { text: s.cause === 'faint' ? 'Out of air' : s.cause === 'croc' ? 'Snapped up' : 'Shot down', tone: 'loss' };
+  else if (b && ph === 'crashed') status = { text: s.cause === 'faint' ? 'Out of air' : 'Shot down', tone: 'loss' };
   else if (b) status = { text: 'Bet placed', tone: 'gold' };
   else if (sl.queued) status = { text: 'Queued for next round', tone: 'gold' };
   else if (sl.autoOn) status = { text: 'Auto bet on', tone: 'auto' };

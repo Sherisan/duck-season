@@ -65,11 +65,14 @@ function gunPivot(k: number) {
   return hunterToScene(205, 372, k);
 }
 
-/** Muzzle tip in scene coordinates for a gun angle (art/Hunter.tsx draws it at (450, 365) before aiming). */
+/**
+ * Muzzle tip in scene coordinates for a gun angle. art/Hunter.tsx draws the gun level with its
+ * muzzle at (466, 372), then tips it by -1.64° about the pivot, which puts the muzzle at (465.9, 364.5).
+ */
 export function muzzlePosition(aimDeg: number, k = HUNTER_SCALE): { x: number; y: number } {
   const a = (aimDeg * Math.PI) / 180;
-  const vx = 450 - 205;
-  const vy = 365 - 372;
+  const vx = 465.9 - 205;
+  const vy = 364.5 - 372;
   return hunterToScene(205 + vx * Math.cos(a) - vy * Math.sin(a), 372 + vx * Math.sin(a) + vy * Math.cos(a), k);
 }
 
@@ -109,14 +112,9 @@ export function shotRandom(serverSeed: string, nonce: number): () => number {
 export const SKY = { minX: 40, maxX: 960, minY: 60, maxY: 440 };
 export const SKY_OVER_HUNTER = { maxX: 380, maxY: 190 };
 
-/** Seconds the steered duck can stay low over the lake before the crocodile gets it, and to calm it. */
-export const CROC_SECONDS = 0.75;
-export const CROC_CALM_SECONDS = 1.5;
 /** After a shot or fainted duck lands in the lake, the croc leaps for it: when (s after the splash) and how long in the air. */
 export const CROC_LEAP_START = 0.25;
 export const CROC_LEAP_TIME = 0.8;
-/** Scene y below which the duck is close enough to the water for the crocodile. */
-export const CROC_LINE = 380;
 
 /** Seconds of air the steered duck has in the thin air of the night sky, and to fully recover below it. */
 export const AIR_SECONDS = 5;

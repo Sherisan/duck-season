@@ -18,13 +18,22 @@ export interface HunterProps {
 type Pt = { x: number; y: number };
 
 const PIVOT = { x: 205, y: 372 };
-/** The gun is drawn level along y = 372; this turns it so the muzzle lands on (450, 365). */
+/** The gun is drawn level along y = 372, muzzle at (466, 372); this turns it so the muzzle lands on (465.9, 364.5). */
 const GUN_TILT = -1.64;
 const SUN = '#ffc79a';
 const SKIN_SHADE = '#c98a6c';
 const WHISKER = '#f2eee7';
 const WHISKER_SHADE = '#cfc7ba';
 const BRASS = '#e2bf68';
+
+/** Shells in the cartridge belt: x, and the top of the belt there. */
+const SHELLS = Array.from({ length: 8 }, (_, i) => {
+  const x = 172 + i * 6.6;
+  return { x, y: 403.5 - 0.0022 * (x - 195) * (x - 195) };
+});
+
+/** Posts holding the ventilated rib above the barrels. */
+const RIB_POSTS = Array.from({ length: 16 }, (_, i) => 282 + i * 11.6);
 
 const NEAR_SHOULDER = { x: 180, y: 347 };
 const FAR_SHOULDER = { x: 214, y: 346 };
@@ -87,6 +96,11 @@ export function Hunter({ mood, aim, recoil = 0, flash = false, smoke = -1, bubbl
   const nearElbow = elbow(NEAR_SHOULDER, nearWrist, 46, 42, 1);
   const farWrist = onGun(287, 389);
   const farElbow = elbow(FAR_SHOULDER, farWrist, 45, 45, 1);
+
+  // the sling hangs from its swivels, sagging under its own weight whatever the gun angle
+  const slingA = onGun(184.2, 392);
+  const slingB = onGun(368.2, 383);
+  const sling = `M${slingA.x.toFixed(1)} ${slingA.y.toFixed(1)} Q${((slingA.x + slingB.x) / 2).toFixed(1)} ${(Math.max(slingA.y, slingB.y) + 36).toFixed(1)} ${slingB.x.toFixed(1)} ${slingB.y.toFixed(1)}`;
 
   // he tips his head back a little to follow a high bird
   const tilt = Math.max(-11, Math.min(2, (aim + 10) * 0.22));
@@ -273,11 +287,31 @@ export function Hunter({ mood, aim, recoil = 0, flash = false, smoke = -1, bubbl
         {/* suede shooting patch where the stock sits */}
         <path d="M186 344 C194 340 204 344 207 352 L209 368 C202 372 192 372 186 366 Z" fill="#7b5634" />
         <path d="M188 347 C195 344 202 347 205 353 L206 366 C200 369 193 369 188 364 Z" stroke="#c39a6a" strokeWidth=".7" strokeDasharray="1.2 1.4" fill="none" opacity=".8" />
-        {/* belt with a brass buckle */}
-        <path d="M144 398 C176 404 210 405 243 401 L242 413 C210 417 176 416 145 410 Z" fill={u('twd')} />
-        <path d="M144 398 C176 404 210 405 243 401" stroke="#958a62" strokeWidth=".8" fill="none" />
-        <rect x="224" y="400" width="10" height="14" rx="2" fill="none" stroke={BRASS} strokeWidth="2" />
-        <path d="M226 407 H240" stroke={BRASS} strokeWidth="1.2" />
+        {/* leather cartridge belt: red shells with brass heads in their loops, and a brass buckle */}
+        <path d="M144 398 C176 404 210 405 243 401 L242 413 C210 417 176 416 145 410 Z" fill={u('leather')} />
+        <path d="M144 398 C176 404 210 405 243 401" stroke="#b07a48" strokeWidth=".8" fill="none" />
+        <path d="M145 409 C176 414.6 210 415.6 242 411.6" stroke="#c39a6a" strokeWidth=".6" strokeDasharray="1.4 1.4" fill="none" opacity=".7" />
+        {SHELLS.map(({ x, y }) => (
+          <g key={x}>
+            <rect x={x - 2.6} y={y - 6} width="5.2" height="11" rx="1" fill="#b8282f" />
+            <rect x={x - 2.6} y={y - 6} width="1.6" height="11" fill="#e2585c" opacity=".7" />
+            <rect x={x - 2.9} y={y - 8.4} width="5.8" height="3.2" rx=".8" fill={BRASS} />
+            <path d={`M${x - 2.6} ${y - 7.6} h5.2`} stroke="#fff3c4" strokeWidth=".6" opacity=".8" />
+            <rect x={x - 3.4} y={y + 0.6} width="6.8" height="5" rx="1" fill="#5d371a" />
+          </g>
+        ))}
+        <rect x="223" y="399.5" width="11" height="15" rx="2" fill="none" stroke={BRASS} strokeWidth="2.2" />
+        <path d="M225 407 H240" stroke={BRASS} strokeWidth="1.3" />
+        {/* hunting knife at the back of the hip: stag handle, brass guard, stitched leather sheath */}
+        <g transform="rotate(9 157 405)">
+          <path d="M152 411 L162 411 L161 444 C160 449 154 449 153 444 Z" fill={u('leather')} />
+          <path d="M154.2 413 L154.6 443 M159.8 413 L159.4 443" stroke="#c39a6a" strokeWidth=".6" strokeDasharray="1.2 1.4" />
+          <path d="M153 442.5 L161 442.5 L159.6 448.6 C158.4 450.6 155.6 450.6 154.4 448.6 Z" fill={BRASS} />
+          <path d="M153 410.5 C152 402 152.6 396 155 391.5 C157.6 390.4 160.2 391 161.2 392.6 C162.4 398 162.4 404 161.4 410.5 Z" fill="#d9c8a4" />
+          <path d="M155 395 l1.6 .8 M158.6 399 l1.6 .6 M154.6 403 l1.6 .8 M158.4 406.4 l1.4 .6" stroke="#7a6446" strokeWidth="1" strokeLinecap="round" />
+          <path d="M160.6 393 C161.6 398 161.6 404 160.8 410" stroke="#fff3dc" strokeWidth=".7" fill="none" opacity=".7" />
+          <rect x="150.6" y="409.2" width="13" height="3.4" rx="1.2" fill={BRASS} />
+        </g>
         {/* bellows pocket */}
         <path d="M186 422 L222 420 L224 450 C212 454 196 454 188 451 Z" fill={u('tw')} />
         <path d="M186 422 L222 420 L224 450 C212 454 196 454 188 451 Z" fill="#000" opacity=".12" />
@@ -287,6 +321,10 @@ export function Hunter({ mood, aim, recoil = 0, flash = false, smoke = -1, bubbl
         <path d="M134 456 C160 464 206 462 234 452" stroke="#2c2716" strokeWidth="2" fill="none" />
         <path d="M216 331 C226 340 234 350 239 360 C249 376 249 396 241 410 C240 426 238 440 234 452" stroke={SUN} strokeWidth="2.2" strokeOpacity=".55" fill="none" strokeLinecap="round" />
         <path d="M184 324 C170 328 157 334 150 342 C142 352 139 368 141 384" stroke={accent} strokeOpacity=".35" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        {/* dark green corduroy collar, turned up at the back of the neck */}
+        <path d="M178 334 C182 324 192 317 202 318 L206 330 C198 330 190 334 184 341 Z" fill="#33452b" />
+        <path d="M182 332 C186 325 193 321 200 321 M184 336 C188 329 195 325 202 325" stroke="#4f6a42" strokeWidth=".8" fill="none" />
+        <path d="M184 326 C189 320 195 318 201 318.5" stroke={accent} strokeOpacity=".4" strokeWidth="1" fill="none" strokeLinecap="round" />
       </g>
 
       {/* head, tipped to follow the bird */}
@@ -408,6 +446,10 @@ export function Hunter({ mood, aim, recoil = 0, flash = false, smoke = -1, bubbl
         {/* tweed trilby with a pheasant feather and a fishing fly */}
         <g transform="rotate(-5 206 270)">
           <path d="M176 279 C190 283 214 284 232 280 L230 285 C212 288 192 287 178 284 Z" fill="#000" opacity=".22" />
+          {/* a barred blue jay feather behind the pheasant one */}
+          <path d="M193 266 C188 254 186 242 186 230 C191 240 196 252 197 265 Z" fill="#2f6fc9" />
+          <path d="M187.6 238 l4 -1 M188.2 244 l4.4 -1 M189.4 250 l4.4 -1 M191 256 l4 -.8" stroke="#0d1830" strokeWidth="1.3" />
+          <path d="M186.6 231 C187 236 187.4 240 188 244" stroke="#e8f2ff" strokeWidth=".9" fill="none" />
           {/* feather tucked into the band, sweeping back */}
           <path d="M190 266 C180 252 172 238 166 224 C176 232 186 248 194 264 Z" fill="#b8642a" />
           <path d="M190 266 C181 252 174 239 167 226" stroke="#f0d6a2" strokeWidth=".7" fill="none" />
@@ -419,6 +461,14 @@ export function Hunter({ mood, aim, recoil = 0, flash = false, smoke = -1, bubbl
           <path d="M190 240 C198 234 212 233 222 237" stroke={accent} strokeWidth="1.2" strokeOpacity=".4" fill="none" strokeLinecap="round" />
           <path d="M184 262 C200 266 218 265 233 260 L233 269 C218 273 200 273 184 270 Z" fill="#2a2a1c" />
           <path d="M184 262 C200 266 218 265 233 260" stroke="#4a4a33" strokeWidth=".8" fill="none" />
+          {/* twisted cord round the band, and a silver edelweiss badge */}
+          <path d="M184 268.4 C200 272 218 271 233 266.6" stroke="#8a6f44" strokeWidth="2" strokeDasharray="2.2 1.2" fill="none" />
+          <g transform="translate(205 266)">
+            {[0, 60, 120, 180, 240, 300].map((a) => (
+              <ellipse key={a} cx="0" cy="-2.6" rx="1.3" ry="2.4" fill="#eef1f4" stroke="#8d96a3" strokeWidth=".4" transform={`rotate(${a})`} />
+            ))}
+            <circle r="1.5" fill={BRASS} />
+          </g>
           <path d="M171 272 C182 268 220 266 242 271 C246 274 241 278 232 278 C212 276 192 277 178 280 C170 281 166 276 171 272 Z" fill={u('hat')} />
           <path d="M171 272 C182 268 220 266 242 271 C246 274 241 278 232 278 C212 276 192 277 178 280 C170 281 166 276 171 272 Z" fill={u('shade')} />
           <path d="M178 280 C192 277 212 276 232 278 C238 278 243 276 243 273" stroke="#2e2416" strokeWidth="1.2" fill="none" />
@@ -429,52 +479,112 @@ export function Hunter({ mood, aim, recoil = 0, flash = false, smoke = -1, bubbl
         </g>
       </g>
 
-      {/* the side-by-side, held at the chest */}
+      {/* the leather sling, hanging from its two swivels under the gun */}
+      <g fill="none" strokeLinecap="round">
+        <path d={sling} stroke="#24140a" strokeWidth="5.4" />
+        <path d={sling} stroke="#7a4a26" strokeWidth="3.8" />
+        <path d={sling} stroke="#c39a6a" strokeWidth=".7" strokeDasharray="1.6 1.6" opacity=".8" />
+      </g>
+
+      {/* the over-and-under, held at the chest */}
       <g transform={gunT}>
-        {/* stock: walnut with a straight English grip */}
-        <path d="M161 365 C185 364 214 365 238 366 L240 382 C232 382 226 381 220 381 C204 383 186 388 165 393 C162 393 160 391 160 388 Z" fill={u('wood')} />
-        <path d="M168 371 C186 369 206 369 226 370 M172 380 C188 377 204 375 220 375 M178 386 C190 383 200 381 212 380" stroke="#4e2810" strokeWidth=".7" fill="none" opacity=".6" />
-        <path d="M162 366 C186 365 214 366 236 367" stroke="#e0a56a" strokeWidth="1" fill="none" opacity=".7" />
-        <path d="M219 367 L237 367 L238 381 L219 381 Z" fill={u('hatch')} />
-        <path d="M157 365 L162 365 L162 393 L157 392 C155 384 155 372 157 365 Z" fill="#1d140c" />
-        {/* action, engraved */}
-        <path d="M238 365 L271 365 L271 383 C267 388 259 389 251 388 L240 386 Z" fill={u('silver')} />
-        <path d="M244 370 C248 366 252 374 256 370 C259 367 263 371 265 374 M245 379 C249 376 253 382 258 378 C261 376 264 379 266 381" stroke="#5a626e" strokeWidth=".7" fill="none" />
-        <circle cx="262" cy="376" r="1.3" fill="#6d7581" />
-        <path d="M266 365 C268 365 271 367 271 370 L266 370 Z" fill="#8a929d" />
-        <path d="M234 362 L247 361 L247.5 365 L236 366 Z" fill={u('silver')} />
-        <path d="M228.5 363 L234 362.5 L234 365 L228.5 365.5 Z" fill="#c7cdd5" />
-        {/* trigger guard and triggers */}
-        <path d="M238 386 C238 397 256 398 261 388" stroke="#2a2f38" strokeWidth="2" fill="none" />
-        <path d="M246.5 386 C247 389 246 391.5 244.5 393 M251.5 386 C252 389 251 391 249.5 392.5" stroke="#3a404b" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        {/* barrels, rib and bead */}
-        <path d="M270 366 L450 368 L450 376 L270 378 Z" fill={u('blue')} />
-        <path d="M270 364.6 L450 367.1 L450 368.4 L270 366.2 Z" fill="#c2ccd9" />
-        <path d="M272 369.4 L448 370.4" stroke="#c8d2df" strokeWidth=".8" opacity=".55" />
-        <path d="M272 377.2 L448 375.4" stroke="#07090d" strokeWidth=".8" />
-        <circle cx="447.5" cy="366.6" r="1.2" fill="#f4f6f9" />
-        <ellipse cx="450" cy="372" rx="1.4" ry="3.9" fill="#07090d" />
-        {/* splinter fore-end */}
-        <path d="M272 378 L330 377 C334 377 336 379 334 381 L330 384 L274 386 C270 385 270 381 272 378 Z" fill={u('wood')} />
-        <path d="M274 382 C292 381 310 380 330 380" stroke="#4e2810" strokeWidth=".6" fill="none" opacity=".6" />
-        <path d="M271 378 L278 378 L278 386 L272 386 C270 384 270 380 271 378 Z" fill={u('silver')} />
-        <ellipse cx="302" cy="381.5" rx="2.6" ry="1.4" fill="#c7cdd5" />
+        {/* barrels: two, one over the other, blued, under a ventilated rib with a gold bead */}
+        <path d="M274 361.4 L466 363 L466 369.6 L274 370 Z" fill={u('blue')} />
+        <path d="M274 370 L466 369.6 L466 376.6 L274 378.4 Z" fill={u('blue')} />
+        <path d="M276 362.9 L462 364.3" stroke="#d6dfeb" strokeWidth=".9" opacity=".75" />
+        <path d="M276 371.6 L462 371" stroke="#9aa7bb" strokeWidth=".7" opacity=".55" />
+        <path d="M274 370 L466 369.6" stroke="#06080c" strokeWidth="1.1" />
+        <path d="M276 377.6 L464 375.9" stroke="#05070a" strokeWidth=".9" />
+        <path d="M272 356.2 L466 358.6 L466 360.2 L272 357.8 Z" fill="#56627a" />
+        <path d="M272 356.2 L466 358.6" stroke="#e3eaf3" strokeWidth=".7" />
+        {RIB_POSTS.map((x) => (
+          <rect key={x} x={x} y={357.6 + (x - 272) * 0.0124} width="1.8" height="4.2" fill="#3c4558" />
+        ))}
+        {/* muzzle: the choke band and both bores */}
+        <path d="M455 362.9 L466 363 L466 376.6 L455 376.8 Z" fill="#262d3a" />
+        <path d="M455 362.9 V376.8" stroke="#aeb9c9" strokeWidth=".6" />
+        <ellipse cx="466" cy="366.3" rx="1.3" ry="2.4" fill="#020304" />
+        <ellipse cx="466" cy="373.1" rx="1.3" ry="2.4" fill="#020304" />
+        <circle cx="462.5" cy="357.4" r="1.6" fill="#f3d47c" />
+        {/* barrel swivel for the sling */}
+        <path d="M364 377.2 L372 377 L372 380.4 L364 380.6 Z" fill="#2a313d" />
+        <path d="M366 380.4 v1.6 a2.2 2.2 0 0 0 4.4 0 v-1.6" stroke="#a9b2be" strokeWidth="1.1" fill="none" />
+
+        {/* stock: figured walnut, a checkered grip, a gold oval and a red recoil pad */}
+        <path d="M162 363.6 C186 362.8 214 363.6 236 364.6 L238 383 C232 383 226 382 220 382 C204 384 186 389 166 395 C163 395 161 393 161 390 Z" fill={u('wood')} />
+        <path
+          d="M168 370 C182 366 196 372 210 368 C218 366 226 368 232 370 M170 379 C184 375 196 381 208 376 C214 374 220 375 226 376 M176 387.5 C186 384.5 194 386.5 204 383.5"
+          stroke="#3e1e0a"
+          strokeWidth=".8"
+          fill="none"
+          opacity=".55"
+        />
+        <path d="M188 373.5 C192 370.5 200 371 202 374 C200 377 192 377.5 188 373.5 Z" fill="none" stroke="#3e1e0a" strokeWidth=".7" opacity=".45" />
+        <path d="M163 364.6 C186 363.8 214 364.6 235 365.6" stroke="#f0b779" strokeWidth="1.1" fill="none" opacity=".75" />
+        <path d="M218 365.8 L236 366.2 L237.6 382 L219 382 Z" fill={u('hatch')} />
+        <ellipse cx="192" cy="385" rx="4.2" ry="2" fill={BRASS} stroke="#8a6a24" strokeWidth=".5" />
+        <path d="M153 363.6 L161 363.6 L161 395.2 L154 394.4 C152 386 152 372 153 363.6 Z" fill="#5a1a14" />
+        <path d="M161 363.6 V395.2" stroke="#0c0806" strokeWidth="1.6" />
+        <path d="M154.6 368 v3 M154.2 376 v3 M154.2 384 v3" stroke="#2a0b08" strokeWidth=".9" />
+        <path d="M182 388.6 v2.6 a2.2 2.2 0 0 0 4.4 0 v-2.6" stroke="#a9b2be" strokeWidth="1.1" fill="none" />
+
+        {/* receiver: bright steel, gold-lined, with a gold duck inlaid and scroll engraving */}
+        <path d="M228 362.2 L246 361 L246 364.4 L229 365.4 Z" fill={u('silver')} />
+        <path d="M236 361.4 L276 360 L276 380 C272 386 262 389.5 250 389.5 L238 387.6 Z" fill={u('silver')} />
+        <path d="M240.5 364.8 L272 363.8 L272 379 C268 383.4 260 385.8 250.5 385.8 L241.5 384.6 Z" fill="none" stroke={BRASS} strokeWidth=".8" />
+        <path
+          d="M243 369 c3 -3 6 1 4 3 c-2 2 -5 -1 -2 -3 M263 367.5 c3 -2 6 1 4 3 M244 381 c4 -2 8 2 12 0 c3 -1.6 6 0 8 1.4"
+          stroke="#5a626e"
+          strokeWidth=".6"
+          fill="none"
+        />
+        <path
+          d="M249 376 C251 373 254.5 372.4 256.6 373.4 L261.2 369.6 L260.6 373.4 C262.2 373.2 263.8 372.8 265 372.2 C264.6 374.2 262.8 375.4 260.2 376 C257 377.2 252.6 377.4 249 376 Z"
+          fill={BRASS}
+        />
+        <circle cx="268.5" cy="379.5" r="1.6" fill="#6d7581" stroke="#c7cdd5" strokeWidth=".4" />
+        <circle cx="245.5" cy="380.5" r="1.3" fill="#6d7581" stroke="#c7cdd5" strokeWidth=".4" />
+        {/* top lever and the gold safety on the tang */}
+        <path d="M238 361 C241 357.4 247 357 251 358.6 L251 360.8 L238 361.4 Z" fill="#8a929d" />
+        <rect x="231" y="360.2" width="4.4" height="2.2" rx=".9" fill={BRASS} />
+        {/* forend iron at the hinge */}
+        <path d="M274 360.4 C277.5 360.4 279 362.4 279 365 L274 365 Z" fill="#8a929d" />
+
+        {/* trigger guard and a gold trigger */}
+        <path d="M239 387.6 C239 399.5 258 401 263.5 389" stroke="#1e232b" strokeWidth="2.3" fill="none" />
+        <path d="M239.6 388.2 C240 398 257 399.8 262.6 389.4" stroke="#7d8692" strokeWidth=".6" fill="none" />
+        <path d="M250 388.6 C250.6 392 249.6 394.6 247.6 396" stroke={BRASS} strokeWidth="1.9" fill="none" strokeLinecap="round" />
+
+        {/* beavertail forend, checkered, under the barrels */}
+        <path d="M278 378 L346 377 C353 377 357 380 355 384 L349 388.6 L282 390 C277 389 275 383 278 378 Z" fill={u('wood')} />
+        <path d="M292 380.2 L340 379.4 L338 386.8 L294 387.8 Z" fill={u('hatch')} />
+        <path d="M282 379.4 L346 378.4" stroke="#e0a56a" strokeWidth=".8" fill="none" opacity=".6" />
+        <path d="M276 377.6 L284 377.6 L284 390 L279 389.6 C276 387 275 381 276 377.6 Z" fill={u('silver')} />
+
         {flash && (
           <g>
-            <circle cx="454" cy="372" r="26" fill="#ffd27a" opacity=".45" />
-            <path d="M451 372 L486 355 L476 369 L506 373 L476 378 L492 395 L457 381 Z" fill="#ffe7a6" />
-            <path d="M451 372 L472 365 L468 372 L480 376 L463 378 Z" fill="#fff" />
+            <circle cx="474" cy="370" r="42" fill="#ffb347" opacity=".22" />
+            <circle cx="471" cy="370" r="25" fill="#ffd27a" opacity=".5" />
+            <path d="M466 370 L502 346 L491 364 L534 368 L493 375 L515 398 L479 380 L472 404 L468 378 Z" fill="#ffae45" />
+            <path d="M466 370 L494 355 L485 367 L514 370 L485 375 L499 390 L473 377 Z" fill="#ffe7a6" />
+            <path d="M466 370 L483 364.5 L479 370 L492 373 L473 375.5 Z" fill="#fff" />
+            <g fill="#ffe7a6">
+              <circle cx="520" cy="352" r="1.6" />
+              <circle cx="530" cy="384" r="1.3" />
+              <circle cx="507" cy="342" r="1.1" />
+              <circle cx="540" cy="372" r="1.2" />
+            </g>
           </g>
         )}
         {smoke >= 0 &&
-          [0, 1, 2].map((k) => (
+          [0, 1, 2, 3].map((k) => (
             <circle
               key={k}
-              cx={458 + smoke * 50 + k * 12}
-              cy={369 - smoke * 22 - k * 6}
-              r={6 + smoke * 22 - k * 3}
+              cx={474 + smoke * 56 + k * 13}
+              cy={369 - smoke * 24 - k * 6}
+              r={7 + smoke * 24 - k * 3}
               fill="#d9d4cc"
-              opacity={Math.max(0, (1 - smoke) * (0.5 - k * 0.12))}
+              opacity={Math.max(0, (1 - smoke) * (0.52 - k * 0.11))}
             />
           ))}
       </g>
@@ -518,10 +628,16 @@ export function Hunter({ mood, aim, recoil = 0, flash = false, smoke = -1, bubbl
         fill="none"
         opacity=".7"
       />
-      {/* near hand on the grip, finger on the front trigger */}
+      {/* suede elbow patch */}
+      <g transform={`translate(${nearElbow.x.toFixed(1)} ${nearElbow.y.toFixed(1)}) rotate(${deg(NEAR_SHOULDER, nearElbow).toFixed(1)})`}>
+        <ellipse cx="-3" cy="0" rx="8.5" ry="7.5" fill="#7b5634" />
+        <ellipse cx="-3" cy="0" rx="7" ry="6" fill="none" stroke="#c39a6a" strokeWidth=".6" strokeDasharray="1.2 1.3" opacity=".85" />
+        <ellipse cx="-3" cy="0" rx="8.5" ry="7.5" fill={u('limb')} />
+      </g>
+      {/* near hand on the grip, finger on the trigger */}
       <g transform={gunT}>
-        <path d="M234 384 L245 389" stroke="#9a5f46" strokeWidth="5.4" strokeLinecap="round" />
-        <path d="M234 384 L245 389" stroke={u('hand')} strokeWidth="4" strokeLinecap="round" />
+        <path d="M234 384 L248 390" stroke="#9a5f46" strokeWidth="5.4" strokeLinecap="round" />
+        <path d="M234 384 L248 390" stroke={u('hand')} strokeWidth="4" strokeLinecap="round" />
         <path d="M211 366 C215 360 226 359 232 362 C236 365 238 371 236 377 C238 381 238 387 234 390 C228 392 219 391 213 388 C209 382 208 372 211 366 Z" fill={u('hand')} />
         <path d="M230 363 C234 368 236 374 235 381" stroke="#b5765b" strokeWidth=".9" fill="none" />
         <path d="M217 384.5 C223 385.5 229 385 235 383.5 M216 388 C222 389 228 388.5 233 387" stroke="#a5654c" strokeWidth=".8" fill="none" />

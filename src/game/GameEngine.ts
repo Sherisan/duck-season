@@ -1,9 +1,6 @@
 import {
   AIR_REFILL_SECONDS,
   AIR_SECONDS,
-  CROC_CALM_SECONDS,
-  CROC_LINE,
-  CROC_SECONDS,
   DUCK_SPEED,
   DUCK_START,
   HOLD_MS,
@@ -94,7 +91,6 @@ export class GameEngine {
       misses: [],
       air: 1,
       airLine: airLine(0),
-      croc: 1,
       cause: 'shot',
       points: [],
       history: [],
@@ -245,7 +241,6 @@ export class GameEngine {
           steering: false,
           misses: [],
           air: 1,
-          croc: 1,
           now,
           cloudX,
         });
@@ -297,13 +292,6 @@ export class GameEngine {
         this.crash(round, m, t, now, cloudX, duckX, duckY, 'faint');
         return;
       }
-      // steered low over the lake, the duck tempts the crocodile, which lunges if it lingers
-      const low = this.pointer !== null && duckY > CROC_LINE;
-      const croc = low ? s.croc - dts / CROC_SECONDS : Math.min(1, s.croc + dts / CROC_CALM_SECONDS);
-      if (croc <= 0) {
-        this.crash(round, m, t, now, cloudX, duckX, duckY, 'croc');
-        return;
-      }
       // before it, his shots hit only if the duck is inside his sight ring
       let misses = s.misses;
       if (t >= this.nextShotT) {
@@ -324,7 +312,7 @@ export class GameEngine {
           this.applyCash(w, i, b.target, now);
         }
       }
-      const patch: Partial<GameState> = { ...(w ?? {}), mult: m, now, cloudX, duckX, duckY, duckVX, duckVY, aimX, aimY, misses, air, croc };
+      const patch: Partial<GameState> = { ...(w ?? {}), mult: m, now, cloudX, duckX, duckY, duckVX, duckVY, aimX, aimY, misses, air };
       const last = s.points[s.points.length - 1];
       if (!last || t - last.t > 0.12) patch.points = [...s.points, { t, m, x: duckX, y: duckY }];
       this.set(patch);
@@ -354,11 +342,7 @@ export class GameEngine {
         sl.result = {
           win: false,
           text:
-            cause === 'faint'
-              ? `Bet ${i + 1}: out of air at ${fmtX(m)}. Bet lost.`
-              : cause === 'croc'
-                ? `Bet ${i + 1}: snapped up by the croc at ${fmtX(m)}. Bet lost.`
-                : `Bet ${i + 1} shot down at ${fmtX(m)}. Bet lost.`,
+            cause === 'faint' ? `Bet ${i + 1}: out of air at ${fmtX(m)}. Bet lost.` : `Bet ${i + 1} shot down at ${fmtX(m)}. Bet lost.`,
         };
       }
     });

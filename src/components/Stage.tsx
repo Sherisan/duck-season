@@ -1,14 +1,12 @@
 import { Duck, type DuckState } from '../art/Duck';
 import { Hunter, type HunterMood } from '../art/Hunter';
-import { CrocHead, CrocLeaper, CrocLurk } from '../art/Croc';
+import { CrocLeaper, LEAPER_HEAD } from '../art/Croc';
 import { Clouds, SceneBank, SceneForeground, SceneLand, SceneNearShore, SceneSky } from '../art/Scene';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   AIR_SECONDS,
   CROC_LEAP_START,
   CROC_LEAP_TIME,
-  CROC_LINE,
-  CROC_SECONDS,
   WAIT_MS,
   HOLD_MS,
   DUCK_START,
@@ -25,7 +23,7 @@ import {
 } from '../game/engine';
 import type { GameEngine } from '../game/GameEngine';
 import { fmt, fmtX } from '../game/format';
-import { LINES } from '../game/lines';
+import { line } from '../game/lines';
 import type { GameState } from '../game/types';
 
 /** Left edge of open water; the bank is to the left of it. */
@@ -61,17 +59,21 @@ function deathMotion(cx: number, cy: number, ux: number, uy: number, h: number) 
 
 const FEATHER_FILLS = ['#c2a07a', '#efe8dc', '#7d5e41', '#1d9a82'];
 
-/** The crocodile's attack (seconds from the crash): it reaches the duck, snaps shut, then drags it under. */
-const CROC_REACH = 0.26;
-const CROC_SNAP = 0.34;
-const CROC_PULL = 0.42;
-const CROC_PULL_TIME = 0.55;
-/** The lunging croc's size on stage, and the angle it lunges up at; the duck is held this far along its jaws. */
-const CROC_SCALE = 1.4;
-const CROC_ANGLE = -72;
+/** How far along the croc's jaws (in its own units) the duck is held. */
 const JAW_BITE = 74;
 /** The whole leaping croc's size on stage. */
-const LEAP_SCALE = 0.62;
+const LEAP_SCALE = 0.8;
+/** The size of the leap's arc, kept smaller than the croc so a big croc still stays on stage at the top of its jump. */
+const LEAP_ARC = 0.7;
+/** Seconds the leaper keeps going after the bite, diving on along its arc into the lake. */
+const LEAP_DIVE = 0.5;
+/** The leaper's body length (in its own units), so its body can follow the arc behind its head. */
+const LEAP_BODY = 510;
+
+const smoothstep = (p: number) => {
+  const c = Math.min(1, Math.max(0, p));
+  return c * c * (3 - 2 * c);
+};
 
 /** A splash at x on the lake, `t` seconds after it: ripple rings, foam, a crown and droplets; `size` scales it. */
 function Splash({ x, t, size = 1 }: { x: number; t: number; size?: number }) {
@@ -106,9 +108,6 @@ function Splash({ x, t, size = 1 }: { x: number; t: number; size?: number }) {
   );
 }
 
-const easeOut = (p: number) => 1 - (1 - p) * (1 - p);
-const easeIn = (p: number) => p * p;
-
 /** Phones: the whole scene, with the near shore below it for the altitude gauge. */
 const PHONE_VIEW = { x: 0, w: 1000, h: 680 };
 
@@ -136,10 +135,9 @@ export function Stage({ s, engine }: { s: GameState; engine: GameEngine }) {
   const { phase: ph, now, mult: m } = s;
   const t = ph === 'flying' ? (now - s.t0) / 1000 : 0;
   const e = ph === 'crashed' ? (now - s.crashAt) / 1000 : 0;
-  // the round ended with the duck fainting from lack of air, or taken by the crocodile: no blast
+  // the round ended with the duck fainting from lack of air: no blast
   const faint = s.cause === 'faint';
-  const croc = s.cause === 'croc';
-  const quiet = faint || croc;
+  const quiet = faint;
   // seconds since the shot reached the duck, or since it fainted (negative while the shot is in the air)
   const h = quiet ? e : e - SHOT_TRAVEL;
   const waitLeft = Math.max(0, (s.waitEnd - now) / 1000);
@@ -147,9 +145,8 @@ export function Stage({ s, engine }: { s: GameState; engine: GameEngine }) {
   // phones draw the scene small, so the hunter, duck and croc are drawn larger there than on wider screens
   const wide = fit !== 'phone';
   const hk = wide ? HUNTER_SCALE_WIDE : HUNTER_SCALE;
-  const dk = wide ? 0.8 : 1;
+  const dk = wide ? 0.9 : 1.1;
   const ck = wide ? 0.8 : 1;
-  const crocBite = JAW_BITE * CROC_SCALE * ck;
 
   // the shot line, from the muzzle to where the duck was hit
   const crashAim = aimAngle(s.crashX, s.crashY, hk);
@@ -157,56 +154,72 @@ export function Stage({ s, engine }: { s: GameState; engine: GameEngine }) {
   const shotLen = Math.hypot(s.crashX - mz.x, s.crashY - mz.y) || 1;
   const ux = (s.crashX - mz.x) / shotLen;
   const uy = (s.crashY - mz.y) / shotLen;
-  // the crocodile's lunge: its jaw hinge rises from under the water so the jaws close on the duck,
-  // then it tips over and dives, taking the duck with it
-  let crocHead: { x: number; y: number; a: number; open: number } | null = null;
-  if (ph === 'crashed' && croc) {
-    const lunge = easeOut(Math.min(1, e / CROC_REACH));
-    const pull = e < CROC_PULL ? 0 : easeIn(Math.min(1, (e - CROC_PULL) / CROC_PULL_TIME));
-    const up = (CROC_ANGLE * Math.PI) / 180;
-    const reachY = s.crashY - crocBite * Math.sin(up);
-    const snap = Math.min(1, Math.max(0, (e - CROC_REACH) / (CROC_SNAP - CROC_REACH)));
-    crocHead = {
-      x: s.crashX - crocBite * Math.cos(up),
-      y: SURFACE + 130 + (reachY - SURFACE - 130) * lunge + pull * (SURFACE + 210 - s.crashY),
-      a: CROC_ANGLE + pull * 26,
-      open: 56 - snap * 50,
-    };
-  }
-  const death =
-    ph === 'crashed' && croc
-      ? { x: 0, y: 0, rot: 0, hs: e, lx: s.crashX - 18 }
-      : ph === 'crashed' && h >= 0
-        ? deathMotion(s.crashX, s.crashY, faint ? 0 : ux, faint ? 0 : uy, h)
-        : null;
+  const death = ph === 'crashed' && h >= 0 ? deathMotion(s.crashX, s.crashY, faint ? 0 : ux, faint ? 0 : uy, h) : null;
   const hs = death ? death.hs : -1;
 
   // --- after a shot or fainted duck lands, the croc leaps out of the lake and comes down on it ---
   // it springs from whichever side has open water, along an arc that ends with its jaws on the duck
   const leapT = hs - CROC_LEAP_START;
   const leapK = LEAP_SCALE * ck;
+  const arcK = LEAP_ARC * ck;
   const leapDir: 1 | -1 = death && death.lx < 715 ? -1 : 1;
-  const leapFromX = death ? death.lx - leapDir * 390 * leapK : 0;
-  const eaten = ph === 'crashed' && !croc && leapT >= CROC_LEAP_TIME * 0.97;
-  let leap: { x: number; y: number; a: number; open: number } | null = null;
-  if (ph === 'crashed' && !croc && death && leapT >= 0 && leapT < CROC_LEAP_TIME + 0.2) {
-    const q = Math.min(1, leapT / CROC_LEAP_TIME);
-    const bite = JAW_BITE * leapK;
-    const sx = death.lx - leapDir * 470 * leapK;
+  const leapFromX = death ? death.lx - leapDir * 390 * arcK : 0;
+  // the jaws close on the duck, and once the croc has gone under with it the duck is gone
+  const caught = ph === 'crashed' && leapT >= CROC_LEAP_TIME * 0.97;
+  const eaten = caught && leapT >= CROC_LEAP_TIME + LEAP_DIVE;
+  let leap: {
+    x: number;
+    y: number;
+    a: number;
+    open: number;
+    tipX: number;
+    tipY: number;
+    /** 0 to 1 over the moment the jaws bite shut (outside that, no burst). */
+    chomp: number;
+    bend: number;
+    reach: number;
+    wet: number;
+  } | null = null;
+  if (ph === 'crashed' && death && leapT >= 0 && leapT < CROC_LEAP_TIME + LEAP_DIVE) {
+    // q runs 0 to 1 from the jump to the bite, then on past 1 as it dives along the same arc
+    const q = leapT / CROC_LEAP_TIME;
+    const bite = JAW_BITE * LEAPER_HEAD * leapK;
+    // each round's jump is a little higher or lower than the last
+    const hop = 0.9 + 0.2 * ((Math.abs(Math.sin(s.crashX * 12.9898 + s.crashY * 78.233)) * 43758.5453) % 1);
+    const sx = death.lx - leapDir * 470 * arcK;
     const sy = SURFACE + 30;
     const ex = death.lx - leapDir * 0.5 * bite;
     const ey = SURFACE - 2 - 0.866 * bite;
     const cx = (sx + ex) / 2;
-    const cy = SURFACE - 480 * leapK;
+    const cy = SURFACE - 480 * arcK * hop;
     const r = 1 - q;
-    const vx = 2 * r * (cx - sx) + 2 * q * (ex - cx);
-    const vy = 2 * r * (cy - sy) + 2 * q * (ey - cy);
-    const snap = Math.min(1, Math.max(0, (q - 0.86) / 0.12));
+    const vel = (p: number) => ({ x: 2 * (1 - p) * (cx - sx) + 2 * p * (ex - cx), y: 2 * (1 - p) * (cy - sy) + 2 * p * (ey - cy) });
+    const heading = (v: { x: number; y: number }) => (Math.atan2(v.y, v.x * leapDir) * 180) / Math.PI;
+    const v = vel(q);
+    const a = heading(v);
+    // the body follows the arc behind the head: it bends by how far the arc turns over one body length
+    const back = q - (LEAP_BODY * leapK) / (Math.hypot(v.x, v.y) || 1);
+    // jaws open wider and wider as it rises, quivering for the duck, then slam shut (faster and
+    // faster) just before they reach it, and bounce a little from the force of the bite
+    const wide = smoothstep(q / 0.6);
+    const gape = 8 + 50 * wide + Math.sin(leapT * 26) * 2 * wide;
+    const shut = Math.min(1, Math.max(0, (q - 0.9) / 0.06));
+    const rebound = q > 0.96 ? Math.sin(Math.min(1, (q - 0.96) / 0.1) * Math.PI) * 4 : 0;
+    const x = r * r * sx + 2 * q * r * cx + q * q * ex;
+    const y = r * r * sy + 2 * q * r * cy + q * q * ey;
+    const rad = (a * Math.PI) / 180;
     leap = {
-      x: r * r * sx + 2 * q * r * cx + q * q * ex,
-      y: r * r * sy + 2 * q * r * cy + q * q * ey,
-      a: (Math.atan2(vy, vx * leapDir) * 180) / Math.PI,
-      open: 46 - snap * 42,
+      x,
+      y,
+      a,
+      open: gape * (1 - shut * shut) + rebound,
+      tipX: x + leapDir * Math.cos(rad) * bite * 1.1,
+      tipY: y + Math.sin(rad) * bite * 1.1,
+      chomp: (q - 0.95) / 0.22,
+      bend: Math.min(100, Math.max(0, a - heading(vel(back)))),
+      // legs tucked back for the jump, reaching out for the landing, then tucked again for the dive
+      reach: q < 1 ? smoothstep((q - 0.45) / 0.4) : Math.max(0, 1 - (q - 1) * 4),
+      wet: Math.min(1, Math.max(0.25, 1.15 - q)),
     };
   }
 
@@ -225,14 +238,13 @@ export function Stage({ s, engine }: { s: GameState; engine: GameEngine }) {
     else if (s.duckVX > 80) faceRef.current = 1;
     rot = Math.max(-40, Math.min(28, -14 + s.duckVY * 0.05 * faceRef.current));
     duckState = 'fly';
-  } else if (crocHead) {
-    // flapping in panic until the jaws shut, then held in them as the croc dives
-    const held = e >= CROC_SNAP;
-    const rad = (crocHead.a * Math.PI) / 180;
-    dx = held ? crocHead.x + crocBite * Math.cos(rad) : s.crashX;
-    dy = held ? crocHead.y + crocBite * Math.sin(rad) : s.crashY;
-    rot = held ? crocHead.a + 90 + Math.sin(e * 40) * 6 : -14 + Math.sin(e * 50) * 10;
-    duckState = held ? 'hit' : 'fly';
+  } else if (leap && caught) {
+    // in the leaper's jaws as it dives
+    const rad = (leap.a * Math.PI) / 180;
+    dx = leap.x + leapDir * Math.cos(rad) * JAW_BITE * LEAPER_HEAD * leapK;
+    dy = leap.y + Math.sin(rad) * JAW_BITE * LEAPER_HEAD * leapK;
+    rot = death!.rot + Math.sin(e * 40) * 6;
+    duckState = 'hit';
   } else if (h < 0) {
     dx = s.crashX;
     dy = s.crashY;
@@ -261,21 +273,21 @@ export function Stage({ s, engine }: { s: GameState; engine: GameEngine }) {
   let mood: HunterMood = 'idle';
   let bubble: string | null = null;
   if (ph === 'crashed') {
-    mood = croc ? 'annoyed' : 'cheer';
-    if (e > 0.15 && e < 2.8) bubble = croc ? LINES.croc : faint ? LINES.faint : LINES.hit;
+    mood = 'cheer';
+    if (e > 0.15 && e < 2.8) bubble = line(faint ? 'faint' : 'hit', s.nonce);
     // ...until the croc takes his duck
-    if (eaten && leapT >= CROC_LEAP_TIME) {
+    if (caught && leapT >= CROC_LEAP_TIME) {
       mood = 'annoyed';
-      bubble = LINES.stolen;
+      bubble = line('stolen', s.nonce);
     }
   } else if (ph === 'flying') {
     const sinceCash = (now - s.lastCashAt) / 1000;
     if (me < 1.4) {
       mood = 'annoyed';
-      bubble = s.misses.length > 1 ? LINES.missAgain : LINES.miss;
+      bubble = line(s.misses.length > 1 ? 'missAgain' : 'miss', s.nonce + s.misses.length - 1);
     } else if (s.lastCashAt > s.t0 && sinceCash < 1.5) {
       mood = 'annoyed';
-      bubble = LINES.cashout;
+      bubble = line('cashout', s.nonce);
     } else mood = 'aim';
   }
 
@@ -336,10 +348,8 @@ export function Stage({ s, engine }: { s: GameState; engine: GameEngine }) {
 
   // --- thin air: the duck's oxygen while it is up in the night band (meter in the read-out) ---
   const thin = ph === 'flying' && s.steering && s.duckY < s.airLine;
-  // ...and low over the lake, the crocodile's patience
-  const low = ph === 'flying' && s.steering && s.duckY > CROC_LINE;
-  const zoneLeft = thin ? s.air : low ? s.croc : 1;
-  const meterColor = zoneLeft < 0.4 ? '#ff6a5c' : zoneLeft < 0.7 ? '#f2b84b' : thin ? '#6cc4ff' : '#5fd3a0';
+  const zoneLeft = thin ? s.air : 1;
+  const meterColor = zoneLeft < 0.4 ? '#ff6a5c' : zoneLeft < 0.7 ? '#f2b84b' : '#6cc4ff';
   // phones draw the scene small, so the zone labels are drawn larger there
   const k = fit === 'phone' ? 1.8 : 1;
 
@@ -356,15 +366,13 @@ export function Stage({ s, engine }: { s: GameState; engine: GameEngine }) {
     kickerClass = 'kicker--game';
     sub = thin
       ? `Thin air! ${(s.air * AIR_SECONDS).toFixed(1)}s left · fly lower!`
-      : low
-        ? `Croc below! ${(s.croc * CROC_SECONDS).toFixed(1)}s · fly higher!`
-        : live.length
+      : live.length
       ? `Your ${fmt(stake)} is worth ${fmt(stake * m)}`
       : s.steering
         ? 'Keep out of his sights!'
         : 'Move your cursor to steer the duck';
   } else {
-    kicker = croc ? 'Snapped up' : faint ? 'Out of air' : 'Shot down';
+    kicker = faint ? 'Out of air' : 'Shot down';
     kickerClass = 'kicker--loss';
     sub = `Next round in ${Math.max(0, HOLD_MS / 1000 - e).toFixed(1)}s`;
   }
@@ -429,43 +437,54 @@ export function Stage({ s, engine }: { s: GameState; engine: GameEngine }) {
           {leap && (
             <g clipPath={`url(#${clipId})`}>
               <g transform={`translate(${leap.x.toFixed(1)} ${leap.y.toFixed(1)}) scale(${leapDir * leapK} ${leapK}) rotate(${leap.a.toFixed(1)})`}>
-                <CrocLeaper open={leap.open} />
+                <CrocLeaper open={leap.open} bend={leap.bend} t={leapT} reach={leap.reach} wet={leap.wet} />
               </g>
             </g>
           )}
-          {/* the crocodile surfacing under a duck that lingers low over the lake */}
-          {ph === 'flying' && s.croc < 1 && (
-            <g
-              transform={`translate(${Math.min(960, Math.max(450, s.duckX - 12)).toFixed(1)} ${(SURFACE - 1 + s.croc * 5).toFixed(1)})`}
-              opacity={Math.min(1, (1 - s.croc) * 4)}
-            >
-              <ellipse rx={56 + (1 - s.croc) * 20} ry="5" fill="none" stroke="#cfe6ff" strokeWidth="1.2" opacity=".35" />
-              <g transform={`scale(${1.5 * ck})`}>
-                <CrocLurk />
+          {/* the bite: impact lines bursting from the jaws, and a CHOMP! */}
+          {leap && leap.chomp >= 0 && leap.chomp < 1 && (
+            <g opacity={1 - leap.chomp} pointerEvents="none">
+              <g stroke="#fff6dc" strokeWidth={2.4 * ck} strokeLinecap="round">
+                {[-150, -110, -70, -30, 10, 50].map((d) => {
+                  const a = (d * Math.PI) / 180;
+                  const r0 = (14 + leap!.chomp * 22) * ck;
+                  const r1 = r0 + (10 - leap!.chomp * 6) * ck;
+                  return (
+                    <line
+                      key={d}
+                      x1={leap!.tipX + Math.cos(a) * r0}
+                      y1={leap!.tipY + Math.sin(a) * r0}
+                      x2={leap!.tipX + Math.cos(a) * r1}
+                      y2={leap!.tipY + Math.sin(a) * r1}
+                    />
+                  );
+                })}
               </g>
+              <text
+                x={leap.tipX}
+                y={leap.tipY - (44 + leap.chomp * 20) * ck}
+                textAnchor="middle"
+                className="miss-pop"
+                style={{ fontSize: 26 * ck }}
+                transform={`rotate(-8 ${leap.tipX.toFixed(1)} ${leap.tipY.toFixed(1)})`}
+              >
+                CHOMP!
+              </text>
             </g>
           )}
-          {/* splashes: where the duck (or the lunging croc) hit the water, and the leaping croc out and back in */}
+          {/* splashes: where the duck hit the water, and the leaping croc out and back in */}
           {death && hs >= 0 && <Splash x={death.lx} t={hs} />}
-          {death && !croc && <Splash x={leapFromX} t={leapT - 0.1} size={1.1} />}
-          {death && !croc && <Splash x={death.lx} t={leapT - CROC_LEAP_TIME * 0.98} size={1.6} />}
+          {death && <Splash x={leapFromX} t={leapT - 0.1} size={1.1} />}
+          {death && <Splash x={death.lx} t={leapT - CROC_LEAP_TIME * 0.98} size={1.6} />}
           {/* bubbles rising where it went under */}
           {death &&
             [0, 1, 2, 3, 4].map((k) => {
-              const p = (hs - (croc ? 0.9 : CROC_LEAP_START + CROC_LEAP_TIME + 0.25) - k * 0.28) / 0.35;
+              const p = (hs - (CROC_LEAP_START + CROC_LEAP_TIME + 0.25) - k * 0.28) / 0.35;
               if (p < 0 || p > 1) return null;
               return (
                 <circle key={k} cx={death.lx + [-8, 6, -2, 10, 1][k]} cy={SURFACE - 1 - p * 3} r={1 + p * 3} fill="none" stroke="#e8f3ff" strokeWidth="1.2" opacity={1 - p} />
               );
             })}
-          {/* the lunging head goes over its own splash */}
-          {crocHead && (
-            <g clipPath={`url(#${clipId})`}>
-              <g transform={`translate(${crocHead.x.toFixed(1)} ${crocHead.y.toFixed(1)}) rotate(${crocHead.a.toFixed(1)}) scale(${CROC_SCALE * ck})`}>
-                <CrocHead open={crocHead.open} />
-              </g>
-            </g>
-          )}
           {missLine && (
             <g strokeLinecap="round" opacity={1 - me / 0.35}>
               <line {...missLine} stroke="#ffcf6a" strokeWidth="6" opacity=".3" />
@@ -503,14 +522,11 @@ export function Stage({ s, engine }: { s: GameState; engine: GameEngine }) {
               <circle r="1.6" style={{ fill: 'var(--game)' }} />
             </g>
           )}
-          {/* zone marks: the thin air at the top of the sky, and the crocodile's water at the bottom */}
+          {/* zone mark: the thin air at the top of the sky */}
           {ph === 'flying' && s.steering && (
             <g opacity=".6">
               <text x={14 * k} y={s.airLine - 7 * k} className="air-label" style={{ fontSize: 11 * k }}>
                 THIN AIR
-              </text>
-              <text x={1000 - 14 * k} y={CROC_LINE + 4 * k} textAnchor="end" className="croc-label" style={{ fontSize: 11 * k }}>
-                CROC WATER
               </text>
             </g>
           )}
@@ -578,7 +594,7 @@ export function Stage({ s, engine }: { s: GameState; engine: GameEngine }) {
           </div>
         )}
         <span className="stage__sub num">
-          {(thin || low) && (
+          {thin && (
             <span className={`air-meter${zoneLeft < 0.4 ? ' air-low' : ''}`} aria-hidden="true">
               <i style={{ width: `${Math.max(0, zoneLeft) * 100}%`, background: meterColor }} />
             </span>

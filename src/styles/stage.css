@@ -440,14 +440,7 @@
   fill: #cfe8ff;
 }
 
-.croc-label {
-  font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  fill: #c8f0b4;
-}
-
-/* the duck's oxygen (or the croc's patience), shown at the start of the read-out line */
+/* the duck's oxygen, shown at the start of the read-out line */
 .air-meter {
   display: inline-block;
   vertical-align: middle;
@@ -484,6 +477,22 @@
 
 .flock {
   animation: flock 40s linear infinite;
+}
+
+/* each goose's wings beat from up over its back to down under its body */
+.goose-wing {
+  transform-box: fill-box;
+  transform-origin: 30% 100%;
+  animation: goose-flap 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes goose-flap {
+  from {
+    transform: scaleY(1);
+  }
+  to {
+    transform: scaleY(-0.75);
+  }
 }
 
 @keyframes flock {

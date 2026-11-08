@@ -7,6 +7,15 @@ const HEAD = 'M23 -30 C23 -38 29 -43 36 -42.5 C42 -42 46 -38 46.5 -33 C47 -30 46
 const NEAR_WING =
   'M14 -10 C10 -26 2 -42 -8 -54 C-12 -59 -18 -62 -25 -63 C-21 -59 -19 -56 -18 -53 C-22 -52.5 -24 -50.5 -24 -47.5 C-20 -46.5 -17 -44.5 -16 -42.5 C-20 -41.5 -21 -39 -20 -36.5 C-16 -35.5 -13 -33 -12 -30 C-15 -27 -15 -23 -13 -21 C-9 -19 -7 -15 -6 -10 Z';
 
+/** The scarf's two tails from the knot at his neck, streaming back in flight, and their stripes. */
+const SCARF_NEAR =
+  'M18 -21.6 C10 -25 2 -21 -6 -25 C-12 -28 -18 -26.4 -26 -30.4 C-24 -27 -24 -25 -27 -22.6 C-19 -20.6 -13 -22.4 -6 -19 C2 -15.6 9 -18.6 17.6 -17.4 Z';
+const SCARF_FAR = 'M18.6 -22.6 C12 -28 4 -27 -2 -31 C-6 -33.6 -10 -33 -15 -35.8 C-14 -32.6 -14.4 -30.4 -17 -28.4 C-10 -27.6 -5 -28.8 0 -26 C6 -23 11 -23.6 18 -20.6 Z';
+const SCARF_STRIPES = 'M-1 -24.4 L-2.6 -19.6 M-12 -26 L-13.2 -21.6 M-21 -27.6 L-22 -23.4';
+const SCARF_HANG = 'M18 -21 C13 -20 9.6 -16.6 8 -11.6 C7 -8.4 7.6 -5.6 6.6 -3.4 L11.4 -3.4 C11.6 -6.4 11.6 -9 12.6 -11.8 C14 -15.6 16 -17.6 18.4 -18 Z';
+const SCARF_HANG_FAR = 'M17 -21.6 C13 -21 10.4 -18 9.6 -14 L13 -13.4 C13.8 -16.6 15.6 -18.6 17.6 -19 Z';
+const SCARF_HANG_STRIPES = 'M8.4 -8.4 L12 -7.8 M10.4 -14 L13.8 -13.2';
+
 /** Mallow the mallard drake, centred on (0, 0), facing right. Place it with a transform. */
 export function Duck({ state }: { state: DuckState }) {
   const id = useId().replace(/:/g, '');
@@ -70,14 +79,20 @@ export function Duck({ state }: { state: DuckState }) {
           <stop offset="0" stopColor="#ffa040" />
           <stop offset="1" stopColor="#d76a12" />
         </linearGradient>
+        <linearGradient id={`${id}-scarf`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ff5a4e" />
+          <stop offset="1" stopColor="#b51f2c" />
+        </linearGradient>
+        <radialGradient id={`${id}-lens`} cx=".35" cy=".35" r=".7">
+          <stop offset="0" stopColor="#e6f6ff" />
+          <stop offset=".5" stopColor="#7fc4e8" />
+          <stop offset="1" stopColor="#2f6f96" />
+        </radialGradient>
         <clipPath id={`${id}-clip`}>
           <path d={BODY} />
         </clipPath>
         <clipPath id={`${id}-wclip`}>
           <path d={NEAR_WING} />
-        </clipPath>
-        <clipPath id={`${id}-sclip`}>
-          <path d="M-20 -19 L-26 -37 L-11.5 -39 L-7 -20 Z" />
         </clipPath>
       </defs>
 
@@ -108,6 +123,13 @@ export function Duck({ state }: { state: DuckState }) {
       {/* warm light along the back and breast */}
       <path d="M-40 -10 C-26 -15 -4 -17 12 -16" stroke="#ffd3a0" strokeOpacity=".55" strokeWidth="1.3" fill="none" strokeLinecap="round" />
       <path d="M26 -11 C32 -6 34 0 33 5" stroke="#ffb27a" strokeOpacity=".6" strokeWidth="1.3" fill="none" strokeLinecap="round" />
+
+      {/* the red flying scarf's tails, streaming back in flight, hanging when it floats or falls */}
+      <g className={flying ? 'scarf' : undefined}>
+        <path d={flying ? SCARF_FAR : SCARF_HANG_FAR} fill="#8f1823" />
+        <path d={flying ? SCARF_NEAR : SCARF_HANG} fill={u('scarf')} />
+        <path d={flying ? SCARF_STRIPES : SCARF_HANG_STRIPES} stroke="#fff3e6" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".85" />
+      </g>
 
       {/* folded wing, tertials and primaries over the rump */}
       {state === 'float' && (
@@ -140,6 +162,17 @@ export function Duck({ state }: { state: DuckState }) {
       <path d="M44.5 -35 C46.2 -32 46.3 -29 44.5 -26.5" stroke="#ffcf8a" strokeWidth="1.1" fill="none" opacity=".55" strokeLinecap="round" />
       {/* white collar */}
       <path d="M14.5 -15 C18 -13 24 -12 27.5 -13 L28.2 -10.6 C24 -9.4 18 -10 14 -12.2 Z" fill="#f6f3ec" />
+      {/* the scarf wound round his neck */}
+      <path d="M16.4 -24.4 C20.4 -21.2 26.6 -20.6 31.4 -22.6 L33.4 -17.6 C28.4 -15.4 20.6 -15.8 15.2 -19.6 Z" fill={u('scarf')} />
+      <path d="M17.4 -22.6 C21.4 -19.8 26.8 -19.4 31.6 -21" stroke="#fff3e6" strokeWidth="1.1" fill="none" opacity=".8" />
+      <path d="M15.2 -19.6 C20.6 -15.8 28.4 -15.4 33.4 -17.6" stroke="#7d1220" strokeWidth=".9" fill="none" />
+      {/* flying goggles pushed up on his crown: leather strap, brass rim, glinting lens */}
+      <g transform={hit ? 'rotate(28 36 -40)' : undefined}>
+        <path d="M23.4 -33.6 C26.4 -38.6 30.6 -41.4 34.6 -42" stroke="#5a3a22" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+        <circle cx="38" cy="-42.4" r="4.4" fill={u('lens')} stroke="#c99a3a" strokeWidth="1.6" />
+        <path d="M35.6 -44 A3 3 0 0 1 38.6 -45.4" stroke="#fff" strokeWidth=".9" fill="none" opacity=".9" />
+        <circle cx="33.2" cy="-41.8" r="1" fill="#c99a3a" />
+      </g>
 
       {hit ? (
         <g>
@@ -154,13 +187,14 @@ export function Duck({ state }: { state: DuckState }) {
         </g>
       ) : (
         <g>
-          <circle cx="37.4" cy="-32.6" r="2.5" fill="#3a2414" />
-          <circle cx="37.6" cy="-32.6" r="1.7" fill="#0b0806" />
-          <circle cx="38.4" cy="-33.5" r=".7" fill="#fff" />
+          <ellipse cx="37.6" cy="-32.2" rx="3.7" ry="4" fill="#fbf8f0" />
+          <circle cx="38.6" cy="-32" r="2.5" fill="#4a2c14" />
+          <circle cx="38.9" cy="-32" r="1.7" fill="#0b0806" />
+          <circle cx="39.7" cy="-33" r=".8" fill="#fff" />
           <path
-            d={flying ? 'M33.8 -35.4 C36 -36.4 39 -36.2 41 -34.8' : 'M34 -35.2 C36 -36 39 -35.8 40.8 -34.6'}
-            stroke="#0a3a32"
-            strokeWidth=".9"
+            d={flying ? 'M33 -36.6 C35.8 -37 39 -36.2 42 -33.8' : 'M33.6 -36.4 C36 -37.4 39.4 -37.2 41.6 -35.4'}
+            stroke="#062a24"
+            strokeWidth="1.8"
             fill="none"
             strokeLinecap="round"
           />
@@ -189,11 +223,11 @@ export function Duck({ state }: { state: DuckState }) {
             {/* speculum band along the secondaries */}
             <g clipPath={u('wclip')}>
               <path d="M-20 -19 L-26 -37 L-11.5 -39 L-7 -20 Z" fill={u('spec')} />
-              <path d="M-7 -20 L-11.5 -39" stroke="#f4f1ea" strokeWidth="1.1" />
+              <path d="M-7 -20 L-11.5 -39 M-20 -19 L-26 -37" stroke="#f4f1ea" strokeWidth="1.4" />
+              <path d="M-17 -22 L-21 -37 M-12.4 -21 L-16 -38.4" stroke="#8fa8ff" strokeWidth=".6" opacity=".6" />
             </g>
-            <g clipPath={u('sclip')}>
-              <path d={NEAR_WING} stroke="#f4f1ea" strokeWidth="2.2" fill="none" />
-            </g>
+            {/* the primaries spread like fingers at the tip */}
+            <path d="M-18 -53 L-8 -49 M-24 -47.5 L-10 -45 M-16 -42.5 L-8 -42 M-20 -36.5 L-10 -37" stroke="#2a2420" strokeWidth=".8" opacity=".7" />
             <path d="M-4 -14 L-9 -40 M2 -15 L-3 -44 M8 -14 L4 -40" stroke="#4f463b" strokeWidth=".7" opacity=".5" />
             {/* warm leading edge */}
             <path d="M14 -10 C10 -26 2 -42 -8 -54 C-12 -59 -18 -62 -25 -63" stroke="#ffd3a0" strokeOpacity=".55" strokeWidth="1.2" fill="none" />

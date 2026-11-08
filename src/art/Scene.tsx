@@ -119,17 +119,48 @@ export const SceneSky = memo(function SceneSky({ top = 0 }: { top?: number }) {
       <circle cx="730" cy="452" r="62" fill={u('sun')} />
       <circle cx="730" cy="452" r="70" fill="none" stroke="#fff3cf" strokeWidth="1.5" opacity=".35" />
 
-      {/* a skein of geese crossing the sky */}
-      <g className="flock" fill="none" stroke="#1a1428" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity=".75">
-        <path d="M600 210 q6 -6 12 0 q6 -6 12 0" />
-        <path d="M584 200 q5 -5 10 0 q5 -5 10 0" />
-        <path d="M570 190 q4 -4 8 0 q4 -4 8 0" />
-        <path d="M618 222 q5 -5 10 0 q5 -5 10 0" />
-        <path d="M634 232 q4 -4 8 0 q4 -4 8 0" />
+      {/* a skein of geese crossing the sky in a V, beating their wings out of step */}
+      <g className="flock" opacity=".85">
+        {GEESE.map(([x, y, s], i) => (
+          <Goose key={i} x={x} y={y} s={s} delay={-i * 0.23} />
+        ))}
       </g>
     </g>
   );
 });
+
+/** The geese in their V, flying right: [x, y, size]; the leader is at the point, the rest trail back up and down. */
+const GEESE: [number, number, number][] = [
+  [646, 214, 1],
+  [628, 205, 0.94],
+  [611, 197, 0.88],
+  [594, 190, 0.82],
+  [630, 225, 0.94],
+  [614, 235, 0.88],
+  [598, 244, 0.82],
+];
+
+/**
+ * A goose in silhouette against the dusk, facing right: long neck and small head out in front, a
+ * rim of sunlight along its back, and wings that beat (the far one a beat behind and fainter).
+ */
+function Goose({ x, y, s, delay }: { x: number; y: number; s: number; delay: number }) {
+  const ink = '#1a1428';
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <path className="goose-wing" style={{ animationDelay: `${delay + 0.08}s` }} d="M-1 -0.8 C1 -5.6 4.6 -8.6 8.4 -9.6 C6.6 -6 5 -3 4 -0.6 Z" fill={ink} opacity=".55" />
+      {/* body, neck and head, with the tail tucked behind */}
+      <path
+        d="M-10.5 0.4 L-8 -1.4 C-5 -2.6 1 -2.8 5 -1.6 C7 -1.2 8.6 -1.6 10.4 -2.4 C11.6 -3 13.4 -3.2 14.2 -2.4 C14.8 -1.8 14.2 -1.2 13.2 -1 L15.6 -0.6 L13 -0.2 C11.4 0 9.6 0.2 7.8 1 C4 2.6 -3 2.8 -7.4 1.6 Z"
+        fill={ink}
+      />
+      {/* the white chin strap catching the light */}
+      <path d="M11.6 -1.4 C12.2 -0.9 12.8 -0.7 13.4 -0.8" stroke="#e8dccf" strokeWidth=".7" fill="none" opacity=".7" />
+      <path className="goose-wing" style={{ animationDelay: `${delay}s` }} d="M-3.6 -1 C-2 -6.6 2 -10.2 6.4 -11.6 C4.4 -7.4 2.6 -3.8 1.6 -0.8 Z" fill={ink} />
+      <path d="M-8 -1.4 C-4 -2.8 1 -2.8 5 -1.6" stroke="#ffb98a" strokeWidth=".6" fill="none" opacity=".45" />
+    </g>
+  );
+}
 
 const CLOUDS = [
   { x: 120, y: 214, s: 1 },

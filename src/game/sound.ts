@@ -1,7 +1,8 @@
 /**
- * Sound kit: a recorded folk soundtrack, dusk ambience, synthesised effects, and Sir Reginald's
- * lines spoken aloud. Browsers only allow audio after a click, so call unlock() from the sound
- * toggle; setEnabled() then follows the toggle.
+ * Sound kit: a recorded folk soundtrack that gives way to a tension groove (drums, bass, drone)
+ * while the duck is up, band stings for wins and losses, dusk ambience, synthesised effects, and
+ * Sir Reginald's lines spoken aloud. Browsers only allow audio after a click, so call unlock() from
+ * the sound toggle; setEnabled() then follows the toggle.
  */
 
 type Phase = 'waiting' | 'flying' | 'crashed';
@@ -22,9 +23,22 @@ const PLAYLIST = [
 /** Relative to the page, so it works wherever the game is hosted. */
 const MUSIC_URL = 'audio/music/';
 
-/** Voices that suit an elderly English gentleman, best first. */
+/** Voices that suit an elderly English gentleman, best first (each name scores a little less than the one before). */
+const GENTLEMEN = ['ryan', 'thomas', 'george', 'arthur', 'oliver', 'daniel', 'alfie', 'elliot', 'noah', 'uk english male'];
 const MALE_VOICES = /ryan|thomas|george|arthur|oliver|daniel|alfie|elliot|noah|uk english male|\bmale\b/i;
 const FEMALE_VOICES = /hazel|susan|libby|sonia|maisie|mia|abbi|bella|hollie|olivia|kate|serena|martha|female/i;
+
+/** How he says a line: speed and pitch, and whether he clears his throat first. */
+const DELIVERIES = {
+  triumph: { rate: 1.0, pitch: 0.84, harrumph: false },
+  grumble: { rate: 0.88, pitch: 0.7, harrumph: true },
+  outrage: { rate: 1.06, pitch: 0.92, harrumph: true },
+} as const;
+export type Delivery = keyof typeof DELIVERIES;
+
+/** The tension groove under a flight, in D minor: a bass line (one note per beat) and a plucked figure on top. */
+const BASS = [73.42, 73.42, 87.31, 73.42, 110, 73.42, 130.81, 110];
+const LEAD = [587.33, 698.46, 880, 698.46];
 
 export class SoundFx {
   private ctx: AudioContext | null = null;
@@ -44,12 +58,17 @@ export class SoundFx {
   private track: HTMLAudioElement | null = null;
   private trackGain!: GainNode;
   private trackIndex = 0;
+  /** The folk soundtrack's level: it steps back while the tension groove plays under a flight. */
+  private folk!: GainNode;
+  private groove!: GainNode;
+  private pad: { oscs: OscillatorNode[]; filter: BiquadFilterNode; gain: GainNode } | null = null;
+  private nextStep = 0;
+  private step = 0;
 
   private voice: SpeechSynthesisVoice | null = null;
   private saying: string | null = null;
 
   private nextFlap = 0;
-  private nextBeat = 0;
   private nextChirp = 0;
   private nextOwl = 0;
   private phase: Phase = 'waiting';
@@ -80,6 +99,11 @@ export class SoundFx {
       this.music.connect(this.duck);
       this.amb = this.bus(0.45);
       this.fx = this.bus(0.9);
+      this.folk = ctx.createGain();
+      this.folk.connect(this.music);
+      this.groove = ctx.createGain();
+      this.groove.gain.value = 0.75;
+      this.groove.connect(this.music);
 
       // valley reverb: a few seconds of decaying stereo noise
       const conv = ctx.createConvolver();
@@ -111,7 +135,7 @@ export class SoundFx {
       el.preload = 'auto';
       el.addEventListener('ended', () => this.playTrack(this.trackIndex + 1));
       this.trackGain = ctx.createGain();
-      ctx.createMediaElementSource(el).connect(this.trackGain).connect(this.music);
+      ctx.createMediaElementSource(el).connect(this.trackGain).connect(this.folk);
       this.track = el;
       this.loadTrack(0);
 
@@ -141,10 +165,12 @@ export class SoundFx {
       this.nextChirp = t + 0.6;
       this.nextOwl = t + 8;
       this.startWater();
+      if (this.phase === 'flying') this.startPad();
       if (this.timer === null) this.timer = window.setInterval(() => this.tick(), 50);
     } else {
       if (this.timer !== null) window.clearInterval(this.timer);
       this.timer = null;
+      this.stopPad();
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       this.suspendTimer = window.setTimeout(() => {
         this.track?.pause();
@@ -154,38 +180,72 @@ export class SoundFx {
     }
   }
 
-  /** Called with every state update: drives the heartbeat and the wingbeats. */
+  /**
+   * Called with every state update: drives the wingbeats, and swaps the folk tune for the tension
+   * groove (drums, bass and a rising drone) while the duck is up.
+   */
   setPhase(phase: Phase, mult: number) {
-    if (phase === 'flying' && this.phase !== 'flying' && this.ctx) {
-      this.nextFlap = this.ctx.currentTime + 0.05;
-      this.nextBeat = this.ctx.currentTime + 0.4;
+    const ctx = this.ctx;
+    if (ctx && phase !== this.phase) {
+      const t = ctx.currentTime;
+      if (phase === 'flying') {
+        this.nextFlap = t + 0.05;
+        this.nextStep = t + 0.08;
+        this.step = 0;
+        this.fade(this.folk.gain, 0.32, 1.2);
+        if (this.enabled) this.startPad();
+      } else if (this.phase === 'flying') {
+        this.stopPad();
+        this.fade(this.folk.gain, 1, 3);
+      }
     }
     this.phase = phase;
     this.mult = mult;
   }
 
-  /** Sir Reginald says a line, after `delay` seconds. The music dips so every word is clear. */
-  say(text: string, delay = 0) {
+  /**
+   * Sir Reginald says a line, after `delay` seconds, in the manner of `delivery`: a grumble or an
+   * outburst starts with a gruff clearing of the throat. The music dips so every word is clear.
+   */
+  say(text: string, delay = 0, delivery: Delivery = 'triumph') {
     if (!this.enabled || !('speechSynthesis' in window)) return;
+    const how = DELIVERIES[delivery];
     window.setTimeout(() => {
       const synth = window.speechSynthesis;
       if (!this.enabled || (synth.speaking && this.saying === text)) return;
       if (synth.speaking || synth.pending) synth.cancel();
+      const ctx = this.ctx;
+      if (how.harrumph && ctx) this.harrumph(ctx.currentTime);
       const u = new SpeechSynthesisUtterance(text);
       if (this.voice) u.voice = this.voice;
       u.lang = this.voice?.lang ?? 'en-GB';
-      // slower and lower: a portly old gentleman
-      u.rate = 0.92;
-      u.pitch = 0.78;
+      // a portly old gentleman: lower than the voice's own, slower when he grumbles
+      u.rate = how.rate;
+      u.pitch = how.pitch;
       u.volume = 1;
-      u.onstart = () => this.dip(0.28, 0.12);
+      u.onstart = () => this.dip(0.22, 0.12);
       u.onend = u.onerror = () => {
         if (this.saying === text) this.saying = null;
         this.dip(1, 0.7);
       };
       this.saying = text;
-      synth.speak(u);
+      this.dip(0.5, 0.1);
+      window.setTimeout(() => synth.speak(u), how.harrumph ? 380 : 0);
     }, delay * 1000);
+  }
+
+  /** A musical sting from the band, after `delay` seconds: a brass fanfare for a win, a sad trombone for a loss. */
+  sting(kind: 'win' | 'lose', delay = 0) {
+    const ctx = this.live();
+    if (!ctx) return;
+    const t = ctx.currentTime + delay;
+    if (kind === 'win') {
+      [587.33, 739.99, 880].forEach((f, i) => this.brass(t + i * 0.085, f, 0.16, 0.11));
+      [587.33, 739.99, 880, 1174.66].forEach((f) => this.brass(t + 0.27, f, 0.75, 0.07));
+    } else {
+      [233.08, 220, 207.65].forEach((f, i) => this.trombone(t + i * 0.36, f, 0.32, false));
+      this.trombone(t + 1.08, 196, 1.1, true);
+    }
   }
 
   // --- game moments -------------------------------------------------------------------
@@ -232,27 +292,19 @@ export class SoundFx {
     this.splash(t + splashIn, 1);
   }
 
-  /** The crocodile erupts from the lake, its jaws snap shut, and it drags the duck under. */
-  croc() {
-    const ctx = this.live();
-    if (!ctx) return;
-    const t = ctx.currentTime;
-    this.splash(t, 0.8);
-    this.quack(t + 0.08, 2);
-    this.click(t + 0.3, 420, 0.7);
-    this.noiseBurst(t + 0.3, 0.09, 0.55, 'lowpass', 380, 1, this.fx);
-    this.splash(t + 0.6, 1);
-  }
-
-  /** The croc leaps out of the lake (in `emergeIn` s) and comes down jaws-first on the duck (in `diveIn` s). */
+  /**
+   * The croc bursts out of the lake (in `emergeIn` s) hissing, growls through the air, and comes
+   * down jaws-first on the duck (in `diveIn` s) with a crunching CHOMP and a huge splash.
+   */
   crocLeap(emergeIn: number, diveIn: number) {
     const ctx = this.live();
     if (!ctx) return;
     const t = ctx.currentTime;
-    this.splash(t + emergeIn, 0.7);
-    this.click(t + diveIn - 0.04, 420, 0.7);
-    this.noiseBurst(t + diveIn - 0.04, 0.09, 0.55, 'lowpass', 380, 1, this.fx);
-    this.splash(t + diveIn, 1.3);
+    this.splash(t + emergeIn, 0.9);
+    this.hiss(t + emergeIn + 0.06, 0.55);
+    this.growl(t + emergeIn + 0.15, Math.max(0.3, diveIn - emergeIn - 0.25));
+    this.chomp(t + diveIn - 0.06);
+    this.splash(t + diveIn, 1.5);
   }
 
   /** A player cashes out: coins. */
@@ -281,13 +333,17 @@ export class SoundFx {
         this.flap(this.nextFlap, 1);
         this.nextFlap += 1 / rate;
       }
-      // a heartbeat that quickens as the multiplier climbs
-      if (this.nextBeat < t) this.nextBeat = t + 0.02;
-      const bpm = 70 + 70 * Math.min(1, Math.log(Math.max(1, this.mult)) / Math.log(15));
-      while (this.nextBeat < horizon) {
-        this.heartbeat(this.nextBeat, 0.25 + 0.45 * this.intensity);
-        this.nextBeat += 60 / bpm;
+      // the tension groove, in sixteenths, quickening from 96 to 160 bpm as the multiplier climbs
+      if (this.nextStep < t) this.nextStep = t + 0.02;
+      const bpm = 96 + 64 * Math.min(1, Math.log(Math.max(1, this.mult)) / Math.log(20));
+      const sixteenth = 60 / bpm / 4;
+      while (this.nextStep < horizon) {
+        this.beat(this.nextStep, this.step, sixteenth);
+        this.step = (this.step + 1) % 16;
+        this.nextStep += sixteenth;
       }
+      // the drone brightens as the stakes rise
+      this.pad?.filter.frequency.setTargetAtTime(320 + 1700 * this.intensity, t, 0.4);
     }
 
     while (this.nextChirp < horizon) {
@@ -329,16 +385,232 @@ export class SoundFx {
     this.duck.gain.linearRampToValueAtTime(level, t + time);
   }
 
-  /** "Lub-dub": two soft, low thumps. */
-  private heartbeat(t: number, vol: number) {
-    [0, 0.17].forEach((d, i) => {
-      const at = t + d;
-      const g = this.env(at, 0.008, vol * (i ? 0.6 : 1), 0.16);
-      g.connect(this.music);
-      const o = this.osc('sine', i ? 58 : 66, at, 0.2);
-      o.frequency.exponentialRampToValueAtTime(38, at + 0.14);
-      o.connect(g);
+  /** Ramps a gain to `level` over `time` seconds from wherever it is now. */
+  private fade(p: AudioParam, level: number, time: number) {
+    const t = this.ctx!.currentTime;
+    p.cancelScheduledValues(t);
+    p.setValueAtTime(p.value, t);
+    p.linearRampToValueAtTime(level, t + time);
+  }
+
+  // --- the tension groove -----------------------------------------------------------------
+
+  /** One sixteenth of the groove: kick, brushed snare, shaker, a walking bass, and plucks once it's tense. */
+  private beat(t: number, step: number, sixteenth: number) {
+    const k = this.intensity;
+    if (step === 0 || step === 8 || (k > 0.55 && (step === 3 || step === 10))) this.kick(t, 0.42 + 0.3 * k);
+    if (step === 4 || step === 12) this.snare(t, 0.16 + 0.18 * k);
+    if (step % 2 === 0) this.shaker(t, step % 4 === 2 ? 0.07 : 0.04);
+    else if (k > 0.7) this.shaker(t, 0.025);
+    if (step % 2 === 0) this.bass(t, BASS[(step / 2) % BASS.length], sixteenth * 1.8, 0.13 + 0.09 * k);
+    if (k > 0.5 && step % 4 === 0) this.pluck(t, LEAD[(step / 4) % LEAD.length], 0.04 + 0.06 * k);
+  }
+
+  private kick(t: number, vol: number) {
+    const g = this.env(t, 0.002, vol, 0.26);
+    g.connect(this.groove);
+    const o = this.osc('sine', 150, t, 0.3);
+    o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+    o.connect(g);
+    this.noiseBurst(t, 0.012, vol * 0.25, 'highpass', 3000, 0.7, this.groove);
+  }
+
+  private snare(t: number, vol: number) {
+    this.noiseBurst(t, 0.14, vol, 'bandpass', 2200, 0.7, this.groove, 1400);
+    const g = this.env(t, 0.002, vol * 0.5, 0.08);
+    g.connect(this.groove);
+    this.osc('triangle', 190, t, 0.1).connect(g);
+  }
+
+  private shaker(t: number, vol: number) {
+    this.noiseBurst(t, 0.045, vol, 'highpass', 6500, 0.7, this.groove);
+  }
+
+  /** A plucked upright-bass note. */
+  private bass(t: number, f: number, dur: number, vol: number) {
+    const ctx = this.ctx!;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(900, t);
+    lp.frequency.exponentialRampToValueAtTime(220, t + dur);
+    const g = this.env(t, 0.006, vol, dur);
+    lp.connect(g).connect(this.groove);
+    this.osc('sawtooth', f, t, dur + 0.05).connect(lp);
+    this.osc('sine', f / 2, t, dur + 0.05).connect(g);
+  }
+
+  /** A pizzicato string. */
+  private pluck(t: number, f: number, vol: number) {
+    const g = this.env(t, 0.003, vol, 0.28);
+    g.connect(this.groove);
+    g.connect(this.verb);
+    this.osc('triangle', f, t, 0.32).connect(g);
+  }
+
+  /** A low string drone (D and A, slightly detuned) that fades in under the flight. */
+  private startPad() {
+    const ctx = this.ctx;
+    if (!ctx || this.pad) return;
+    const t = ctx.currentTime;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 320;
+    filter.Q.value = 3;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.05, t + 1.6);
+    filter.connect(gain).connect(this.groove);
+    const oscs = [146.83, 147.3, 220, 219.4].map((f) => {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      o.connect(filter);
+      o.start(t);
+      return o;
     });
+    this.pad = { oscs, filter, gain };
+  }
+
+  private stopPad() {
+    const ctx = this.ctx;
+    const pad = this.pad;
+    if (!ctx || !pad) return;
+    this.pad = null;
+    const t = ctx.currentTime;
+    pad.gain.gain.cancelScheduledValues(t);
+    pad.gain.gain.setValueAtTime(pad.gain.gain.value, t);
+    pad.gain.gain.linearRampToValueAtTime(0.0001, t + 0.5);
+    pad.oscs.forEach((o) => o.stop(t + 0.55));
+  }
+
+  // --- the band's stings ------------------------------------------------------------------
+
+  /** A brass note: a buzzy tone whose brightness swells on the attack. */
+  private brass(t: number, f: number, dur: number, vol: number) {
+    const ctx = this.ctx!;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.Q.value = 2;
+    lp.frequency.setValueAtTime(500, t);
+    lp.frequency.exponentialRampToValueAtTime(3200, t + 0.05);
+    lp.frequency.exponentialRampToValueAtTime(1400, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.03);
+    g.gain.setValueAtTime(vol * 0.8, t + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    lp.connect(g);
+    g.connect(this.fx);
+    g.connect(this.verb);
+    this.osc('sawtooth', f, t, dur + 0.05).connect(lp);
+    this.osc('sawtooth', f * 1.004, t, dur + 0.05).connect(lp);
+  }
+
+  /** A sad trombone "wah": the mute opens and closes over the note; the last one wobbles. */
+  private trombone(t: number, f: number, dur: number, wobble: boolean) {
+    const ctx = this.ctx!;
+    const o = this.osc('sawtooth', f, t, dur + 0.05);
+    if (wobble) {
+      const lfo = this.osc('sine', 5.5, t, dur + 0.05);
+      const depth = ctx.createGain();
+      depth.gain.setValueAtTime(0, t);
+      depth.gain.linearRampToValueAtTime(7, t + 0.3);
+      lfo.connect(depth).connect(o.frequency);
+    }
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.Q.value = 6;
+    lp.frequency.setValueAtTime(350, t);
+    lp.frequency.exponentialRampToValueAtTime(1500, t + Math.min(0.14, dur * 0.4));
+    lp.frequency.exponentialRampToValueAtTime(420, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.13, t + 0.04);
+    g.gain.setValueAtTime(0.12, t + dur * 0.75);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(lp).connect(g);
+    g.connect(this.fx);
+    g.connect(this.verb);
+  }
+
+  // --- the hunter's throat and the croc's ------------------------------------------------------
+
+  /** "Hm-HRMPH": an old gentleman clearing his throat before he speaks his mind. */
+  private harrumph(t0: number) {
+    const ctx = this.ctx!;
+    [
+      [0, 0.1, 104, 0.1],
+      [0.14, 0.2, 92, 0.16],
+    ].forEach(([d, len, f, vol]) => {
+      const t = t0 + d;
+      const o = this.osc('sawtooth', f * 1.1, t, len + 0.05);
+      o.frequency.exponentialRampToValueAtTime(f * 0.85, t + len);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      // an "uh" vowel: two formants, with a breathy rasp
+      for (const [fc, q] of [
+        [520, 4],
+        [1150, 6],
+      ] as const) {
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = fc;
+        bp.Q.value = q;
+        o.connect(bp).connect(g);
+      }
+      this.noiseBurst(t, len, vol * 0.5, 'bandpass', 900, 1.2, this.fx);
+      g.connect(this.fx);
+    });
+  }
+
+  /** A crocodile's hiss: rushing breath through bared teeth. */
+  private hiss(t: number, dur: number) {
+    const ctx = this.ctx!;
+    const src = this.src(this.noise, t, dur);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(3200, t);
+    bp.frequency.linearRampToValueAtTime(4800, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp).connect(g).connect(this.fx);
+  }
+
+  /** A deep, rattling growl. */
+  private growl(t: number, dur: number) {
+    const ctx = this.ctx!;
+    const o = this.osc('sawtooth', 62, t, dur + 0.05);
+    o.frequency.linearRampToValueAtTime(48, t + dur);
+    const am = ctx.createGain();
+    am.gain.value = 0.5;
+    const lfo = this.osc('square', 24, t, dur + 0.05);
+    const lg = ctx.createGain();
+    lg.gain.value = 0.5;
+    lfo.connect(lg).connect(am.gain);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 420;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.32, t + 0.1);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(am).connect(lp).connect(g).connect(this.fx);
+  }
+
+  /** CHOMP: the jaws clack shut, bones crunch, and a heavy thud. */
+  private chomp(t: number) {
+    this.click(t, 380, 0.9);
+    const g = this.env(t, 0.002, 0.6, 0.3);
+    g.connect(this.fx);
+    const o = this.osc('sine', 110, t, 0.35);
+    o.frequency.exponentialRampToValueAtTime(38, t + 0.25);
+    o.connect(g);
+    [0.02, 0.07, 0.11, 0.16].forEach((d, i) => this.noiseBurst(t + d, 0.04, 0.32 - i * 0.05, 'bandpass', 1400 + i * 300, 2, this.fx));
   }
 
   // --- effects ----------------------------------------------------------------------------
@@ -636,8 +908,11 @@ function pickVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null 
     let score = 0;
     if (/en[-_]gb/i.test(v.lang)) score += 4;
     if (MALE_VOICES.test(v.name)) score += 3;
-    if (FEMALE_VOICES.test(v.name)) score -= 4;
-    if (/natural|online|neural|enhanced|premium/i.test(v.name)) score += 1;
+    if (FEMALE_VOICES.test(v.name)) score -= 6;
+    // the natural-sounding neural voices are far better than the old robotic ones
+    if (/natural|online|neural|enhanced|premium/i.test(v.name)) score += 3;
+    const rank = GENTLEMEN.findIndex((n) => v.name.toLowerCase().includes(n));
+    if (rank >= 0) score += (GENTLEMEN.length - rank) * 0.2;
     if (score > bestScore) {
       best = v;
       bestScore = score;
