@@ -1,4 +1,8 @@
-/** Pure game maths shared by the engine and the stage. */
+/**
+ * Pure game maths shared by the engine and the stage. Crash points are never drawn here: the
+ * GameEngineAPI draws them. The numbers below mirror its "duck-season" settings, for the rules
+ * text and until the server's own config arrives.
+ */
 
 export const WAIT_MS = 5000;
 export const HOLD_MS = 3400;
@@ -8,27 +12,10 @@ export const MAX_MULT = 10000;
 /** Smallest stake, and the lowest auto cash-out target. */
 export const MIN_BET = 0.1;
 export const MIN_CASHOUT = 1.01;
-export const START_BALANCE = 10000;
 
-/** Multiplier after t seconds of flight (floored to 2 decimals). */
-export function multiplierAt(t: number): number {
-  return Math.floor(Math.exp(GROWTH * t) * 100) / 100;
-}
-
-/** Seconds of flight needed to reach multiplier m. */
-export function timeFor(m: number): number {
-  return Math.log(m) / GROWTH;
-}
-
-/** Crash point from a uniform r in [0, 1): max(1, 0.99 / (1 - r)). */
-export function crashFromUniform(r: number): number {
-  return Math.min(MAX_MULT, Math.max(1, Math.floor(((1 - HOUSE_EDGE) / (1 - r)) * 100) / 100));
-}
-
-/** Uses the first 52 bits of a hex digest as r. */
-export function crashFromHash(hex: string): number {
-  const r = parseInt(hex.slice(0, 13), 16) / 2 ** 52;
-  return crashFromUniform(r);
+/** Multiplier after t seconds of flight (floored to 2 decimals), at the server's growth rate. */
+export function multiplierAt(t: number, growth = GROWTH): number {
+  return Math.floor(Math.exp(growth * t) * 100) / 100;
 }
 
 /** Where the duck floats before take-off: on the water just in front of the hunter. */

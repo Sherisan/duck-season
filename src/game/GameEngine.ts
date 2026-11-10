@@ -3,6 +3,7 @@ import {
   AIR_SECONDS,
   DUCK_SPEED,
   DUCK_START,
+  GROWTH,
   MAX_MULT,
   MIN_BET,
   MIN_CASHOUT,
@@ -159,6 +160,7 @@ export class GameEngine {
     this.connecting = true;
     this.live.handlers = {
       round: (r) => this.onRound(r),
+      tick: (m, serverMs) => this.onTick(m, serverMs),
       myBet: (b, balance) => this.onMyBet(b, balance),
       resync: (s) => this.applySnapshot(s),
       status: (st, message) => {
@@ -215,6 +217,19 @@ export class GameEngine {
     }
   }
 
+  private get growth() {
+    return this.cfg?.growthRate ?? GROWTH;
+  }
+
+  /**
+   * The server's multiplier while flying. The screen counts up on its own between ticks; if it
+   * has drifted from the server by more than a cent, the flight clock is moved to match.
+   */
+  private onTick(m: number, serverMs: number) {
+    if (this.state.phase !== 'flying' || Math.abs(m - this.state.mult) < 0.02) return;
+    this.set({ t0: this.live.toLocal(serverMs) - (Math.log(m) / this.growth) * 1000 });
+  }
+
   private onMyBet(b: MyBet, balance: number | null) {
     if (balance !== null) this.set({ balance });
     if (!this.round || b.roundId !== this.round.id) return;
@@ -225,7 +240,26 @@ export class GameEngine {
       if (balance !== null) w.balance = balance;
       this.applyCash(w, b.slot, b.cashedOutAt, b.win ?? 0, performance.now(), b.winPending);
       this.set(w);
+    } else if (b.status === 'Lost' && !sl.result) {
+      // a bet the crash left open on screen (e.g. a cash-out that arrived too late)
+      const w = this.work();
+      this.lose(w, b.slot, this.state.mult);
+      this.set(w);
     }
+  }
+
+  /** Bet i went down with the duck at m. */
+  private lose(w: Work, i: number, m: number) {
+    const sl = w.slots[i];
+    if (!sl.bet || sl.bet.cashedAt !== null || sl.result) return;
+    const a = sl.bet.amount;
+    sl.bet = { ...sl.bet, cashing: false };
+    w.rowId += 1;
+    w.rows = [{ id: w.rowId, round: this.state.nonce, slot: i + 1, bet: a, at: m, win: false, profit: -a }, ...w.rows].slice(0, MAX_ROWS);
+    w.stats.rounds += 1;
+    w.stats.profit -= a;
+    if (sl.bet.auto) w.lim.net -= a;
+    sl.result = { win: false, text: `Bet ${i + 1} shot down at ${fmtX(m)}. Bet lost.` };
   }
 
   private async sendBet(i: number, roundId: number, amount: number, target: number | null) {
@@ -361,7 +395,7 @@ export class GameEngine {
     if (s.phase === 'flying') {
       // the multiplier follows the server's clock; the server says when it crashes
       const t = Math.max(0, (now - s.t0) / 1000);
-      const m = Math.min(MAX_MULT, multiplierAt(t));
+      const m = Math.min(this.cfg?.maxMultiplier ?? MAX_MULT, multiplierAt(t, this.growth));
       const dts = Math.max(0.001, dt / 1000);
 
       // the duck: towards the player's cursor (with a top speed), or along its default path
@@ -463,13 +497,9 @@ export class GameEngine {
       if (!sl.bet || sl.bet.cashedAt !== null || sl.bet.pending) return;
       // an auto cash-out at or below the crash point won; the server's payment is on its way
       if (sl.bet.target !== null && sl.bet.target <= m) return;
-      const a = sl.bet.amount;
-      w.rowId += 1;
-      w.rows = [{ id: w.rowId, round: round.nonce, slot: i + 1, bet: a, at: m, win: false, profit: -a }, ...w.rows].slice(0, MAX_ROWS);
-      w.stats.rounds += 1;
-      w.stats.profit -= a;
-      if (sl.bet.auto) w.lim.net -= a;
-      sl.result = { win: false, text: `Bet ${i + 1} shot down at ${fmtX(m)}. Bet lost.` };
+      // a cash-out still on its way: the server's answer (or its MyBet) settles it
+      if (sl.bet.cashing) return;
+      this.lose(w, i, m);
     });
     this.pointer = null;
     this.nextShotT = Infinity;
