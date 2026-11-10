@@ -6,6 +6,12 @@ export interface Bet {
   target: number | null;
   cashedAt: number | null;
   auto: boolean;
+  /** Sent, waiting for the server to accept it. */
+  pending?: boolean;
+  /** A cash-out or cancel is on its way to the server. */
+  cashing?: boolean;
+  /** What the server paid. */
+  win?: number;
 }
 
 export interface SlotResult {
@@ -119,6 +125,9 @@ export interface GameState {
   clientSeed: string;
   revealed: RevealedRound | null;
   balance: number;
+  /** Connected to the game server. */
+  online: boolean;
+  currency: string;
   slots: Slot[];
   lim: AutoLimits;
   stats: Stats;

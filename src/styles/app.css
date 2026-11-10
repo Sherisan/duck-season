@@ -1438,23 +1438,20 @@
 }
 
 /*
- * phones: each bet panel is two slim rows (stake, then name and toggles) with the bet button
- * beside both; the chips are dropped, and the state shows as a coloured dot
+ * phones: a header row (name, state in words, toggles), then the stake and chips stacked on the
+ * left with one tall bet button beside them, sized for thumbs
  */
 @media (max-width: 560px) {
   .bet-panel {
     display: grid;
-    grid-template-columns: auto 1fr 40%;
+    /* the middle column lets the toggles run wider than the bet button below them */
+    grid-template-columns: minmax(0, 1fr) auto minmax(112px, 37%);
     grid-template-areas:
+      'title toggles toggles'
       'amount amount btn'
-      'title toggles btn';
-    gap: 4px 6px;
-    padding: 4px 5px 4px 12px;
-  }
-  .bet-panel::before {
-    left: 4px;
-    top: 6px;
-    bottom: 6px;
+      'chips chips btn';
+    gap: 5px 8px;
+    padding: 7px 8px 7px 14px;
   }
   .bet-panel__head,
   .bet-panel__body,
@@ -1463,23 +1460,27 @@
   }
   .bet-panel__title {
     grid-area: title;
+    min-width: 0;
   }
-  .bet-panel__shells,
-  .toggle svg,
-  .chips {
+  .toggle svg {
     display: none;
   }
   .bet-panel__name {
     flex-direction: row;
     align-items: center;
-    gap: 5px;
+    gap: 7px;
+    min-width: 0;
   }
   .bet-panel__label {
-    font-size: 11px;
+    flex: none;
+    font-size: 12px;
   }
   .bet-panel__state {
-    font-size: 0;
-    gap: 0;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 11px;
   }
   .bet-panel__toggles {
     grid-area: toggles;
@@ -1487,55 +1488,83 @@
     justify-content: flex-end;
   }
   .toggle {
-    height: 20px;
-    padding: 0 6px 0 7px;
-    font-size: 10px;
+    height: 26px;
+    padding: 0 8px 0 9px;
+    font-size: 11px;
+    white-space: nowrap;
   }
   .amount {
     grid-area: amount;
-    height: 28px;
-    gap: 6px;
-    padding: 2px 2px 2px 7px;
-    border-radius: 8px;
+    height: 40px;
   }
-  .amount > svg {
-    width: 16px;
-    height: 16px;
-  }
-  .amount__label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
+  /* 16px stops iOS zooming the page when the field is focused */
   .amount__input {
-    height: 18px;
-    font-size: 15px;
-  }
-  .amount__steps {
-    border-radius: 6px;
+    height: 20px;
+    font-size: 16px;
   }
   .step {
-    width: 28px;
+    width: 36px;
+    font-size: 13px;
+  }
+  .chips {
+    grid-area: chips;
+    padding: 3px 4px;
   }
   .bet-panel__body .big-btn {
     grid-area: btn;
     min-height: 0;
-    padding: 3px 6px 5px;
-    border-radius: 9px;
+    gap: 5px;
+    padding: 6px 6px 9px;
   }
   .bet-panel__body .big-btn__label {
-    font-size: 13px;
+    font-size: 15px;
+    text-align: center;
   }
   .bet-panel__body .big-btn__sub {
-    padding: 0 5px;
-    font-size: 10px;
+    padding: 2px 6px;
+    font-size: 11px;
     line-height: 1.25;
   }
   .bet-panel .cashout-row,
   .bet-panel .auto-row {
     grid-column: 1 / -1;
+  }
+  .footer {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px calc(10px + env(safe-area-inset-bottom));
+    font-size: 12px;
+    text-align: center;
+  }
+}
+
+/* the narrowest phones: room for the whole stake, and all four chips and Max on one line */
+@media (max-width: 350px) {
+  .bet-panel {
+    grid-template-columns: minmax(0, 1fr) auto minmax(104px, 35%);
+  }
+  .amount > svg {
+    display: none;
+  }
+  .step {
+    width: 30px;
+  }
+  .chips {
+    gap: 2px;
+    padding: 3px 2px;
+  }
+  .chip,
+  .chip svg {
+    width: 25px;
+    height: 25px;
+  }
+  .chip-max {
+    padding: 0 6px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+  .toggle {
+    padding: 0 6px 0 7px;
   }
 }

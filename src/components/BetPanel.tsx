@@ -33,13 +33,18 @@ export function BetPanel({ index, s, engine }: { index: number; s: GameState; en
   const title = `Bet ${index + 1}`;
 
   let btn: ButtonState;
-  if (b && ph === 'flying' && b.cashedAt === null) btn = { label: 'Cash out', sub: fmt(b.amount * s.mult), variant: 'win' };
+  const won = b && b.cashedAt !== null ? (b.win ?? Math.floor(b.amount * b.cashedAt * 100) / 100) - b.amount : 0;
+  if (b && ph === 'flying' && b.cashedAt === null)
+    btn = b.pending
+      ? { label: 'Placing bet…', sub: fmt(b.amount), variant: 'raised', disabled: true }
+      : { label: b.cashing ? 'Cashing out…' : 'Cash out', sub: fmt(b.amount * s.mult), variant: 'win', disabled: b.cashing };
   else if (b && b.cashedAt !== null && ph === 'flying' && !sl.autoOn)
     btn = sl.queued
       ? { label: 'Cancel queued', sub: `Collected at ${fmtX(b.cashedAt)}`, variant: 'raised' }
-      : { label: 'Bet next round', sub: `Collected +${fmt(b.amount * b.cashedAt - b.amount)}`, variant: 'gold' };
+      : { label: 'Bet next round', sub: `Collected +${fmt(won)}`, variant: 'gold' };
   else if (b && b.cashedAt !== null)
-    btn = { label: 'Collected', sub: `+${fmt(b.amount * b.cashedAt - b.amount)} at ${fmtX(b.cashedAt)}`, variant: 'done' };
+    btn = { label: 'Collected', sub: `+${fmt(won)} at ${fmtX(b.cashedAt)}`, variant: 'done' };
+  else if (b && ph === 'waiting' && b.pending) btn = { label: 'Placing bet…', sub: fmt(b.amount), variant: 'raised', disabled: true };
   else if (b && ph === 'waiting')
     btn = { label: b.auto ? 'Cancel auto' : 'Cancel', sub: `${fmt(b.amount)} placed · launch in ${waitLeft}s`, variant: 'raised' };
   else if (sl.autoOn) btn = { label: 'Auto bet', sub: `${fmt(a)} next round`, variant: 'raised', disabled: true };

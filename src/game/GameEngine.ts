@@ -3,24 +3,20 @@ import {
   AIR_SECONDS,
   DUCK_SPEED,
   DUCK_START,
-  HOLD_MS,
   MAX_MULT,
   MIN_BET,
   MIN_CASHOUT,
   SKY,
-  START_BALANCE,
-  WAIT_MS,
   airLine,
   duckPosition,
   multiplierAt,
   SKY_OVER_HUNTER,
   shotGap,
   shotRandom,
-  sightRadius,
   trackRate,
   winTier,
 } from './engine';
-import type { RoundProvider, RoundResult } from './fairness';
+import type { LiveConfig, LiveCrashClient, LiveRound, LiveSnapshot, MyBet } from '../api/liveCrash';
 import { fmt, fmtX, parseAmount, parseNum } from './format';
 import type { GameState, RoundsOption, Slot } from './types';
 
@@ -54,28 +50,37 @@ const mkSlot = (amountStr: string, targetStr: string): Slot => ({
 /**
  * The whole game loop, framework-free. React reads it through
  * useSyncExternalStore (see useGame.ts); every change replaces the snapshot.
+ *
+ * The GameEngineAPI runs the rounds (api/liveCrash.ts): it draws the crash
+ * point before betting opens, runs the clock, takes the bets, pays cash-outs
+ * and keeps the balance. This class follows the server's rounds and animates
+ * them. Steering the duck and dodging his shots is for show: only the
+ * server's crash point ends a round.
  */
 export class GameEngine {
   private state: GameState;
   private listeners = new Set<() => void>();
   private raf: number | null = null;
-  private round: RoundResult | null = null;
-  private starting = false;
-  private retryAt = 0;
+  /** The server's current round. */
+  private round: LiveRound | null = null;
+  private cfg: LiveConfig | null = null;
+  private connecting = false;
   private lastFrame = 0;
   /** Where the player is steering the duck, or null to fly the default path. */
   private pointer: { x: number; y: number } | null = null;
-  /** Flight time (s) of the hunter's next dodgeable shot. */
+  /** Flight time (s) of the hunter's next shot. */
   private nextShotT = Infinity;
   private rng: () => number = Math.random;
+  /** Out of air: the duck flies its own path until it has its breath back. */
+  private breathless = false;
   events: EngineEvents = {};
 
-  constructor(private provider: RoundProvider) {
+  constructor(private live: LiveCrashClient) {
     const now = performance.now();
     this.state = {
       phase: 'waiting',
       now,
-      waitEnd: now + WAIT_MS,
+      waitEnd: now,
       t0: 0,
       mult: 1,
       crashAt: 0,
@@ -96,15 +101,17 @@ export class GameEngine {
       history: [],
       nonce: 0,
       nextHash: '',
-      clientSeed: 'marsh-' + Math.random().toString(36).slice(2, 10),
+      clientSeed: '',
       revealed: null,
-      balance: START_BALANCE,
+      balance: 0,
+      online: false,
+      currency: '',
       slots: [mkSlot('10,00', '2,00'), mkSlot('20,00', '5,00')],
       lim: { rounds: 25, left: 0, profitStr: '', lossStr: '', net: 0, active: false, lastNonce: 0 },
       stats: { rounds: 0, wagered: 0, profit: 0, best: 0 },
       rows: [],
       rowId: 0,
-      toast: null,
+      toast: 'Connecting to the game server…',
       celebrate: null,
       burstAt: 0,
       lastCashAt: 0,
@@ -131,6 +138,7 @@ export class GameEngine {
 
   start() {
     if (this.raf !== null) return;
+    void this.connect();
     this.lastFrame = performance.now();
     const loop = (now: number) => {
       this.tick(now);
@@ -142,6 +150,110 @@ export class GameEngine {
   stop() {
     if (this.raf !== null) cancelAnimationFrame(this.raf);
     this.raf = null;
+  }
+
+  // ---- the game server ---------------------------------------------------------
+
+  private async connect() {
+    if (this.connecting || this.cfg) return;
+    this.connecting = true;
+    this.live.handlers = {
+      round: (r) => this.onRound(r),
+      myBet: (b, balance) => this.onMyBet(b, balance),
+      resync: (s) => this.applySnapshot(s),
+      status: (st, message) => {
+        this.set({ online: st === 'online', toast: st === 'online' ? null : (message ?? null) });
+      },
+    };
+    try {
+      this.applySnapshot(await this.live.connect());
+      this.set({ toast: null });
+    } catch (e) {
+      this.set({ toast: `${e instanceof Error ? e.message : "Can't reach the game server."} Retrying…` });
+      setTimeout(() => void this.connect(), 3000);
+    } finally {
+      this.connecting = false;
+    }
+  }
+
+  private applySnapshot(s: LiveSnapshot) {
+    this.cfg = s.config;
+    const r = s.state.round;
+    const w = this.work();
+    if (s.balance !== null) w.balance = s.balance;
+    // the player's bets in this round (e.g. after a reload or reconnect)
+    w.slots.forEach((sl) => (sl.bet = null));
+    for (const b of s.state.myBets) {
+      if (b.roundId !== r.id || !w.slots[b.slot]) continue;
+      if (b.status !== 'Active' && b.status !== 'CashedOut') continue;
+      w.slots[b.slot].bet = { amount: b.amount, target: b.autoCashOut, cashedAt: b.cashedOutAt, auto: false, win: b.win ?? undefined };
+    }
+    this.set({
+      ...w,
+      online: true,
+      currency: s.player.currency,
+      history: s.state.history.map((h) => h.crashPoint).slice(0, MAX_HISTORY),
+    });
+    this.round = null;
+    this.onRound(r, true);
+  }
+
+  private onRound(r: LiveRound, restore = false) {
+    const prev = this.round;
+    this.round = r;
+    if (r.status === 'BETTING') {
+      if (!prev || prev.id !== r.id) this.newRound(r, restore);
+      else this.set({ waitEnd: this.live.toLocal(r.phaseEndsAt) });
+      return;
+    }
+    if (r.status === 'FLYING') {
+      if (this.state.phase !== 'flying' || restore) this.launch(r);
+      return;
+    }
+    if (r.status === 'CRASHED' && (this.state.phase !== 'crashed' || restore)) {
+      this.crash(r, r.crashPoint ?? this.state.mult);
+    }
+  }
+
+  private onMyBet(b: MyBet, balance: number | null) {
+    if (balance !== null) this.set({ balance });
+    if (!this.round || b.roundId !== this.round.id) return;
+    const sl = this.state.slots[b.slot];
+    if (!sl?.bet) return;
+    if (b.status === 'CashedOut' && sl.bet.cashedAt === null && b.cashedOutAt !== null) {
+      const w = this.work();
+      if (balance !== null) w.balance = balance;
+      this.applyCash(w, b.slot, b.cashedOutAt, b.win ?? 0, performance.now(), b.winPending);
+      this.set(w);
+    }
+  }
+
+  private async sendBet(i: number, roundId: number, amount: number, target: number | null) {
+    let res: Awaited<ReturnType<LiveCrashClient['placeBet']>>;
+    try {
+      res = await this.live.placeBet(i, amount, target);
+    } catch (e) {
+      res = { ok: false, bet: null, balance: null, error: e instanceof Error ? e.message : 'Bet failed.' };
+    }
+    const sl = this.state.slots[i];
+    if (!sl.bet?.pending || this.round?.id !== roundId) {
+      if (res.balance !== null) this.set({ balance: res.balance });
+      return;
+    }
+    if (res.ok) {
+      const slots = this.state.slots.slice();
+      slots[i] = { ...sl, bet: { ...sl.bet, pending: false } };
+      this.set({ slots, ...(res.balance !== null ? { balance: res.balance } : {}) });
+      return;
+    }
+    // refused: give the stake back on screen and say why
+    const w = this.work();
+    const a = w.slots[i].bet!.amount;
+    w.slots[i].bet = null;
+    w.balance = res.balance ?? w.balance + a;
+    w.stats.wagered -= a;
+    w.toast = `Bet ${i + 1}: ${res.error ?? 'not accepted.'}`;
+    this.set(w);
   }
 
   // ---- helpers ----------------------------------------------------------------
@@ -168,12 +280,28 @@ export class GameEngine {
     this.set({ slots });
   }
 
+  private get minBet() {
+    return this.cfg?.minBet ?? MIN_BET;
+  }
+
+  private get maxBet() {
+    return this.cfg?.maxBet ?? Infinity;
+  }
+
+  private get minCashOut() {
+    return this.cfg?.minAutoCashOut ?? MIN_CASHOUT;
+  }
+
+  /** Puts a bet on the slot and sends it to the server (the server can still refuse it). */
   private place(w: Work, i: number, auto: boolean, nonce: number): boolean {
+    const r = this.round;
+    if (!r || r.status !== 'BETTING' || !this.state.online) return false;
     const sl = w.slots[i];
     const a = parseAmount(sl.amountStr);
-    if (a <= 0 || a > w.balance) return false;
+    if (a < this.minBet || a > this.maxBet || a > w.balance) return false;
     const tg = parseNum(sl.targetStr);
-    sl.bet = { amount: a, target: sl.cashOn && tg >= MIN_CASHOUT ? tg : null, cashedAt: null, auto };
+    const target = sl.cashOn && tg >= this.minCashOut ? Math.round(tg * 100) / 100 : null;
+    sl.bet = { amount: a, target, cashedAt: null, auto, pending: true };
     sl.result = null;
     w.balance -= a;
     w.stats.wagered += a;
@@ -181,17 +309,26 @@ export class GameEngine {
       if (w.lim.rounds !== 'inf') w.lim.left -= 1;
       w.lim.lastNonce = nonce;
     }
+    void this.sendBet(i, r.id, a, target);
     return true;
   }
 
-  private applyCash(w: Work, i: number, m: number, now: number) {
+  private betProblem(w: Work, i: number): string {
+    const a = parseAmount(w.slots[i].amountStr);
+    if (!this.state.online) return "Can't reach the game server.";
+    if (a < this.minBet) return `The minimum bet is ${fmt(this.minBet)}.`;
+    if (a > this.maxBet) return `The maximum bet is ${fmt(this.maxBet)}.`;
+    if (a > w.balance) return `Not enough balance for Bet ${i + 1}.`;
+    return `Bet ${i + 1} could not be placed.`;
+  }
+
+  /** A cash-out the server has confirmed: m and win are the server's. */
+  private applyCash(w: Work, i: number, m: number, win: number, now: number, pending = false) {
     const sl = w.slots[i];
     if (!sl.bet || sl.bet.cashedAt !== null || !this.round) return;
     const a = sl.bet.amount;
-    const win = Math.round(a * m * 100) / 100;
     const pr = win - a;
-    sl.bet = { ...sl.bet, cashedAt: m };
-    w.balance += win;
+    sl.bet = { ...sl.bet, cashedAt: m, win, cashing: false };
     w.burstAt = now;
     w.lastCashAt = now;
     w.rowId += 1;
@@ -203,7 +340,10 @@ export class GameEngine {
     w.stats.profit += pr;
     w.stats.best = Math.max(w.stats.best, m);
     if (sl.bet.auto) w.lim.net += pr;
-    sl.result = { win: true, text: `Bet ${i + 1} cashed out at ${fmtX(m)}: +${fmt(pr)}` };
+    sl.result = {
+      win: true,
+      text: `Bet ${i + 1} cashed out at ${fmtX(m)}: +${fmt(pr)}${pending ? ' (payment pending, it will reach your balance shortly)' : ''}`,
+    };
     const tier = winTier(m);
     if (tier) w.celebrate = { label: tier, total: win, at: now, mult: m };
     this.events.cashout?.(m);
@@ -218,43 +358,10 @@ export class GameEngine {
     const speed = s.phase === 'flying' ? 18 + 80 * Math.min(1, Math.log(s.mult) / Math.log(20)) : 7;
     const cloudX = (s.cloudX + (dt / 1000) * speed) % 1000;
 
-    if (s.phase === 'waiting') {
-      if (!this.round && !this.starting && now >= this.retryAt) {
-        this.starting = true;
-        void this.newRound();
-      }
-      if (this.round && this.round.nonce === s.nonce && now >= s.waitEnd) {
-        this.pointer = null;
-        this.rng = shotRandom(this.round.serverSeed, this.round.nonce);
-        this.nextShotT = shotGap(this.rng(), true);
-        this.set({
-          phase: 'flying',
-          t0: now,
-          mult: 1,
-          points: [{ t: 0, m: 1, x: DUCK_START.x, y: DUCK_START.y }],
-          duckX: DUCK_START.x,
-          duckY: DUCK_START.y,
-          duckVX: 0,
-          duckVY: 0,
-          aimX: DUCK_START.x,
-          aimY: DUCK_START.y,
-          steering: false,
-          misses: [],
-          air: 1,
-          now,
-          cloudX,
-        });
-        this.events.launch?.();
-        return;
-      }
-      this.set({ now, cloudX });
-      return;
-    }
-
-    if (s.phase === 'flying' && this.round) {
-      const round = this.round;
-      const t = (now - s.t0) / 1000;
-      const m = multiplierAt(t);
+    if (s.phase === 'flying') {
+      // the multiplier follows the server's clock; the server says when it crashes
+      const t = Math.max(0, (now - s.t0) / 1000);
+      const m = Math.min(MAX_MULT, multiplierAt(t));
       const dts = Math.max(0.001, dt / 1000);
 
       // the duck: towards the player's cursor (with a top speed), or along its default path
@@ -274,156 +381,167 @@ export class GameEngine {
       const duckVX = (duckX - s.duckX) / dts;
       const duckVY = (duckY - s.duckY) / dts;
 
-      // the hunter's sight chases the duck, with a lag the player can exploit
+      // the hunter's sight chases the duck
       const f = 1 - Math.exp(-trackRate(m, s.misses.length) * dts);
       const aimX = s.aimX + (duckX - s.aimX) * f;
       const aimY = s.aimY + (duckY - s.aimY) * f;
 
-      // at the seeded crash point he never misses
-      if (m >= round.crash || m >= MAX_MULT) {
-        this.crash(round, Math.min(m, round.crash), t, now, cloudX, duckX, duckY);
-        return;
-      }
-      // steered up into the thin air of the night sky the duck runs out of breath, and faints
-      // if it stays too long; lower down it gets its breath back
+      // steered up into the thin air of the night sky the duck runs out of breath; when it is
+      // out of air it drops back to its own flight path to get its breath back
       const thin = this.pointer !== null && duckY < s.airLine;
-      const air = thin ? s.air - dts / AIR_SECONDS : Math.min(1, s.air + dts / AIR_REFILL_SECONDS);
+      let air = thin ? s.air - dts / AIR_SECONDS : Math.min(1, s.air + dts / AIR_REFILL_SECONDS);
       if (air <= 0) {
-        this.crash(round, m, t, now, cloudX, duckX, duckY, 'faint');
-        return;
-      }
-      // before it, his shots hit only if the duck is inside his sight ring
+        air = 0;
+        this.pointer = null;
+        this.breathless = true;
+      } else if (air >= 1) this.breathless = false;
+      // he fires every second or two and misses: it is the server's crash point that ends the round
       let misses = s.misses;
       if (t >= this.nextShotT) {
-        if (Math.hypot(duckX - aimX, duckY - aimY) <= sightRadius(m)) {
-          this.crash(round, m, t, now, cloudX, duckX, duckY);
-          return;
-        }
         misses = [...s.misses, { at: now, x: aimX, y: aimY }];
         this.nextShotT = t + shotGap(this.rng(), false);
         this.events.miss?.();
       }
 
-      let w: Work | null = null;
-      for (let i = 0; i < s.slots.length; i++) {
-        const b = s.slots[i].bet;
-        if (b && b.cashedAt === null && b.target !== null && m >= b.target) {
-          w = w ?? this.work();
-          this.applyCash(w, i, b.target, now);
-        }
-      }
-      const patch: Partial<GameState> = { ...(w ?? {}), mult: m, now, cloudX, duckX, duckY, duckVX, duckVY, aimX, aimY, misses, air };
+      const patch: Partial<GameState> = { mult: m, now, cloudX, duckX, duckY, duckVX, duckVY, aimX, aimY, misses, air };
       const last = s.points[s.points.length - 1];
       if (!last || t - last.t > 0.12) patch.points = [...s.points, { t, m, x: duckX, y: duckY }];
       this.set(patch);
       return;
     }
 
-    if (s.phase === 'crashed' && now - s.crashAt > HOLD_MS && !this.starting) {
-      this.starting = true;
-      this.round = null;
-      void this.newRound();
-    }
     this.set({ now, cloudX });
   }
 
-  /** The duck is hit (or faints) at multiplier m, at (x, y). */
-  private crash(round: RoundResult, m: number, t: number, now: number, cloudX: number, x: number, y: number, cause: GameState['cause'] = 'shot') {
-    const s = this.state;
+  private launch(r: LiveRound) {
+    const now = performance.now();
+    this.pointer = null;
+    this.breathless = false;
+    this.rng = shotRandom(r.serverSeedHash, r.nonce);
+    this.nextShotT = shotGap(this.rng(), true);
+    // drop bets the server never confirmed
     const w = this.work();
     w.slots.forEach((sl, i) => {
-      if (sl.bet && sl.bet.cashedAt === null) {
-        const a = sl.bet.amount;
-        w.rowId += 1;
-        w.rows = [{ id: w.rowId, round: round.nonce, slot: i + 1, bet: a, at: m, win: false, profit: -a }, ...w.rows].slice(0, MAX_ROWS);
-        w.stats.rounds += 1;
-        w.stats.profit -= a;
-        if (sl.bet.auto) w.lim.net -= a;
-        sl.result = {
-          win: false,
-          text:
-            cause === 'faint' ? `Bet ${i + 1}: out of air at ${fmtX(m)}. Bet lost.` : `Bet ${i + 1} shot down at ${fmtX(m)}. Bet lost.`,
-        };
+      if (sl.bet?.pending) {
+        w.balance += sl.bet.amount;
+        w.stats.wagered -= sl.bet.amount;
+        sl.bet = null;
+        w.toast = `Bet ${i + 1} missed this round.`;
       }
+    });
+    this.set({
+      ...w,
+      phase: 'flying',
+      t0: this.live.toLocal(r.startedAt),
+      mult: 1,
+      points: [{ t: 0, m: 1, x: DUCK_START.x, y: DUCK_START.y }],
+      duckX: DUCK_START.x,
+      duckY: DUCK_START.y,
+      duckVX: 0,
+      duckVY: 0,
+      aimX: DUCK_START.x,
+      aimY: DUCK_START.y,
+      steering: false,
+      misses: [],
+      air: 1,
+      nonce: r.nonce,
+      nextHash: r.serverSeedHash,
+      now,
+    });
+    this.events.launch?.();
+  }
+
+  /** The server's crash point: the duck is hit at multiplier m. */
+  private crash(round: LiveRound, m: number) {
+    const s = this.state;
+    const now = performance.now();
+    const t = Math.max(0, (now - s.t0) / 1000);
+    const x = s.duckX;
+    const y = s.duckY;
+    const w = this.work();
+    w.slots.forEach((sl, i) => {
+      if (!sl.bet || sl.bet.cashedAt !== null || sl.bet.pending) return;
+      // an auto cash-out at or below the crash point won; the server's payment is on its way
+      if (sl.bet.target !== null && sl.bet.target <= m) return;
+      const a = sl.bet.amount;
+      w.rowId += 1;
+      w.rows = [{ id: w.rowId, round: round.nonce, slot: i + 1, bet: a, at: m, win: false, profit: -a }, ...w.rows].slice(0, MAX_ROWS);
+      w.stats.rounds += 1;
+      w.stats.profit -= a;
+      if (sl.bet.auto) w.lim.net -= a;
+      sl.result = { win: false, text: `Bet ${i + 1} shot down at ${fmtX(m)}. Bet lost.` };
     });
     this.pointer = null;
     this.nextShotT = Infinity;
+    const crashedAt = round.crashedAt !== null ? Math.min(now, this.live.toLocal(round.crashedAt)) : now;
     this.set({
       ...w,
       phase: 'crashed',
-      cause,
+      cause: 'shot',
       mult: m,
-      crashAt: now,
+      crashAt: crashedAt,
       crashX: x,
       crashY: y,
       duckX: x,
       duckY: y,
       now,
-      cloudX,
-      history: [m, ...s.history].slice(0, MAX_HISTORY),
+      nonce: round.nonce,
+      history: s.history[0] === m && s.revealed?.nonce === round.nonce ? s.history : [m, ...s.history].slice(0, MAX_HISTORY),
       points: [...s.points, { t, m, x, y }],
-      revealed: { nonce: round.nonce, serverSeed: round.serverSeed, crash: round.crash, hitAt: m },
+      revealed: { nonce: round.nonce, serverSeed: round.serverSeedHash, crash: m, hitAt: m },
     });
     this.events.crash?.(m);
   }
 
-  private async newRound() {
-    const nonce = this.state.nonce + 1;
-    let round: RoundResult;
-    try {
-      round = await this.provider.next(nonce, this.state.clientSeed);
-    } catch {
-      this.starting = false;
-      this.retryAt = performance.now() + 2000;
-      this.set({ toast: 'Could not reach the round server. Retrying…' });
-      return;
-    }
-    this.round = round;
+  /** A new betting window from the server. */
+  private newRound(r: LiveRound, restore: boolean) {
+    const nonce = r.nonce;
     const w = this.work();
-    w.slots.forEach((sl) => {
-      sl.bet = null;
-      sl.result = null;
-    });
-
-    if (w.lim.active && w.slots.some((sl) => sl.autoOn)) {
-      const sp = parseNum(w.lim.profitStr);
-      const lo = parseNum(w.lim.lossStr);
-      let why = '';
-      if (w.lim.rounds !== 'inf' && w.lim.left <= 0)
-        why = `Auto play finished: all rounds played. Net ${w.lim.net >= 0 ? '+' : ''}${fmt(w.lim.net)}.`;
-      else if (sp > 0 && w.lim.net >= sp) why = `Auto play stopped: profit target reached (+${fmt(w.lim.net)}).`;
-      else if (lo > 0 && -w.lim.net >= lo) why = `Auto play stopped: loss limit reached (${fmt(w.lim.net)}).`;
-      if (why) {
-        w.slots.forEach((sl) => (sl.autoOn = false));
-        w.lim.active = false;
-        w.toast = why;
-      } else {
-        w.slots.forEach((sl, i) => {
-          if (sl.autoOn && !this.place(w, i, true, nonce)) {
-            sl.autoOn = false;
-            w.toast = `Bet ${i + 1} auto play stopped: not enough demo credits.`;
-          }
-        });
-        if (!w.slots.some((sl) => sl.autoOn)) w.lim.active = false;
-      }
-    }
-
-    w.slots.forEach((sl, i) => {
-      if (sl.queued && !sl.autoOn && !this.place(w, i, false, nonce))
-        w.toast = `Not enough demo credits for Bet ${i + 1}.`;
-      sl.queued = false;
-    });
-
-    this.starting = false;
+    if (!restore)
+      w.slots.forEach((sl) => {
+        sl.bet = null;
+        sl.result = null;
+      });
     this.set({
       ...w,
       phase: 'waiting',
-      waitEnd: performance.now() + WAIT_MS,
+      waitEnd: this.live.toLocal(r.phaseEndsAt),
       nonce,
-      nextHash: round.hash,
+      nextHash: r.serverSeedHash,
       mult: 1,
       points: [],
     });
+    if (restore) return;
+
+    const v = this.work();
+    if (v.lim.active && v.slots.some((sl) => sl.autoOn)) {
+      const sp = parseNum(v.lim.profitStr);
+      const lo = parseNum(v.lim.lossStr);
+      let why = '';
+      if (v.lim.rounds !== 'inf' && v.lim.left <= 0)
+        why = `Auto play finished: all rounds played. Net ${v.lim.net >= 0 ? '+' : ''}${fmt(v.lim.net)}.`;
+      else if (sp > 0 && v.lim.net >= sp) why = `Auto play stopped: profit target reached (+${fmt(v.lim.net)}).`;
+      else if (lo > 0 && -v.lim.net >= lo) why = `Auto play stopped: loss limit reached (${fmt(v.lim.net)}).`;
+      if (why) {
+        v.slots.forEach((sl) => (sl.autoOn = false));
+        v.lim.active = false;
+        v.toast = why;
+      } else {
+        v.slots.forEach((sl, i) => {
+          if (sl.autoOn && !sl.bet && !this.place(v, i, true, nonce)) {
+            v.toast = `Bet ${i + 1} auto play stopped: ${this.betProblem(v, i)}`;
+            sl.autoOn = false;
+          }
+        });
+        if (!v.slots.some((sl) => sl.autoOn)) v.lim.active = false;
+      }
+    }
+
+    v.slots.forEach((sl, i) => {
+      if (sl.queued && !sl.autoOn && !sl.bet && !this.place(v, i, false, nonce)) v.toast = this.betProblem(v, i);
+      sl.queued = false;
+    });
+    this.set(v);
   }
 
   // ---- player actions -------------------------------------------------------------
@@ -439,6 +557,7 @@ export class GameEngine {
     if (Math.abs(line - this.state.airLine) > 1) this.set({ airLine: line });
     const px = clamp(x, Math.max(SKY.minX, view.left + SKY.minX), Math.min(SKY.maxX, view.right - (1000 - SKY.maxX)));
     const maxY = px < SKY_OVER_HUNTER.maxX ? SKY_OVER_HUNTER.maxY : SKY.maxY;
+    if (this.breathless) return;
     this.pointer = { x: px, y: clamp(y, Math.min(view.top + SKY.minY, maxY), maxY) };
     if (!this.state.steering) this.set({ steering: true });
   }
@@ -448,8 +567,8 @@ export class GameEngine {
   }
 
   setAmount(i: number, v: number) {
-    const cap = Math.max(MIN_BET, this.state.balance);
-    const val = Math.max(MIN_BET, Math.min(Math.round(v * 100) / 100, cap));
+    const cap = Math.max(this.minBet, Math.min(this.maxBet, this.state.balance));
+    const val = Math.max(this.minBet, Math.min(Math.round(v * 100) / 100, cap));
     this.patchSlot(i, { amountStr: fmt(val) });
   }
 
@@ -474,21 +593,11 @@ export class GameEngine {
     const s = this.state;
     const sl = s.slots[i];
     if (sl.bet && s.phase === 'flying' && sl.bet.cashedAt === null) {
-      const w = this.work();
-      this.applyCash(w, i, s.mult, performance.now());
-      this.set(w);
+      if (!sl.bet.cashing && !sl.bet.pending) void this.cashOut(i);
       return;
     }
     if (sl.bet && s.phase === 'waiting') {
-      const w = this.work();
-      const b = w.slots[i].bet!.amount;
-      w.balance += b;
-      w.stats.wagered -= b;
-      w.slots[i].bet = null;
-      w.slots[i].autoOn = false;
-      w.toast = null;
-      if (!w.slots.some((x) => x.autoOn)) w.lim.active = false;
-      this.set(w);
+      if (!sl.bet.pending && !sl.bet.cashing) void this.cancel(i);
       return;
     }
     if (sl.autoOn) return;
@@ -498,10 +607,60 @@ export class GameEngine {
     }
     const w = this.work();
     if (!this.place(w, i, false, s.nonce)) {
-      this.set({ toast: `Not enough demo credits for Bet ${i + 1}. Lower it or refill.` });
+      this.set({ toast: this.betProblem(w, i) });
       return;
     }
     w.toast = null;
+    this.set(w);
+  }
+
+  private async cashOut(i: number) {
+    const sl = this.state.slots[i];
+    this.patchSlot(i, { bet: { ...sl.bet!, cashing: true } });
+    let res: Awaited<ReturnType<LiveCrashClient['cashOut']>>;
+    try {
+      res = await this.live.cashOut(i);
+    } catch (e) {
+      res = { ok: false, multiplier: null, win: null, balance: null, error: e instanceof Error ? e.message : 'Cash-out failed.' };
+    }
+    const cur = this.state.slots[i];
+    if (!cur.bet) return;
+    if (res.ok && res.multiplier !== null) {
+      const w = this.work();
+      if (res.balance !== null) w.balance = res.balance;
+      this.applyCash(w, i, res.multiplier, res.win ?? 0, performance.now(), res.balance === null);
+      this.set(w);
+      return;
+    }
+    const slots = this.state.slots.slice();
+    slots[i] = { ...cur, bet: { ...cur.bet, cashing: false } };
+    this.set({ slots, toast: cur.bet.cashedAt === null ? `Bet ${i + 1}: ${res.error ?? 'cash-out failed.'}` : this.state.toast });
+  }
+
+  private async cancel(i: number) {
+    const sl = this.state.slots[i];
+    this.patchSlot(i, { bet: { ...sl.bet!, cashing: true } });
+    let res: Awaited<ReturnType<LiveCrashClient['cancelBet']>>;
+    try {
+      res = await this.live.cancelBet(i);
+    } catch (e) {
+      res = { ok: false, balance: null, error: e instanceof Error ? e.message : 'Cancel failed.' };
+    }
+    const w = this.work();
+    const b = w.slots[i].bet;
+    if (!b) return;
+    if (!res.ok) {
+      w.slots[i].bet = { ...b, cashing: false };
+      w.toast = `Bet ${i + 1}: ${res.error ?? 'could not cancel.'}`;
+      this.set(w);
+      return;
+    }
+    w.balance = res.balance ?? w.balance + b.amount;
+    w.stats.wagered -= b.amount;
+    w.slots[i].bet = null;
+    w.slots[i].autoOn = false;
+    w.toast = null;
+    if (!w.slots.some((x) => x.autoOn)) w.lim.active = false;
     this.set(w);
   }
 
@@ -519,8 +678,8 @@ export class GameEngine {
       return;
     }
     const a = parseAmount(sl.amountStr);
-    if (a <= 0 || a > w.balance) {
-      this.set({ toast: `Not enough demo credits for Bet ${i + 1} auto play.` });
+    if (a < this.minBet || a > this.maxBet || a > w.balance) {
+      this.set({ toast: `Bet ${i + 1} auto play: ${this.betProblem(w, i)}` });
       return;
     }
     sl.autoOn = true;
@@ -532,7 +691,7 @@ export class GameEngine {
       w.lim.left = w.lim.rounds === 'inf' ? Infinity : w.lim.rounds;
       w.lim.lastNonce = 0;
     }
-    if (s.phase === 'waiting' && !sl.bet && this.round) this.place(w, i, true, s.nonce);
+    if (s.phase === 'waiting' && !sl.bet) this.place(w, i, true, s.nonce);
     this.set(w);
   }
 
@@ -553,8 +712,13 @@ export class GameEngine {
     this.set({ lim: { ...this.state.lim, [key]: value } });
   }
 
-  refill() {
-    this.set({ balance: START_BALANCE, toast: `Demo credits refilled to ${fmt(START_BALANCE)}.` });
+  /** Reads the balance from the server again. */
+  async refreshBalance() {
+    try {
+      this.set({ balance: await this.live.getBalance(), toast: null });
+    } catch (e) {
+      this.set({ toast: e instanceof Error ? e.message : "Can't reach the game server." });
+    }
   }
 
   dismissToast() {

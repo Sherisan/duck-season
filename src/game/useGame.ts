@@ -1,7 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { GameEngine } from './GameEngine';
 import { CROC_LEAP_START, CROC_LEAP_TIME, HUNTER_SCALE, HUNTER_SCALE_WIDE, fallTime, splashDelay } from './engine';
-import { LocalDemoProvider } from './fairness';
+import { LiveCrashClient } from '../api/liveCrash';
 import { DELIVERY, line } from './lines';
 import { SoundFx } from './sound';
 
@@ -14,7 +14,7 @@ export interface GameHandle {
 export function useEngine(): GameHandle {
   const ref = useRef<GameHandle | null>(null);
   if (!ref.current) {
-    const engine = new GameEngine(new LocalDemoProvider());
+    const engine = new GameEngine(new LiveCrashClient('duck-season'));
     const sfx = new SoundFx();
     // each moment's sound, plus Sir Reginald saying what his speech bubble shows
     engine.events = {

@@ -26,7 +26,7 @@ export function Header({ balance, soundOn, engine, sfx, onHelp, onMenu }: Props)
           <h1>Duck Season</h1>
         </div>
         <div className="topbar__tags">
-          <span className="tag">RTP up to 99%</span>
+          <span className="tag">RTP 99%</span>
           <span className="tag">Max 10 000×</span>
           <span className="tag">
             Volatility
@@ -44,13 +44,11 @@ export function Header({ balance, soundOn, engine, sfx, onHelp, onMenu }: Props)
           <Coin size={26} />
           <div className="balance__text">
             <span className="balance__value num">{fmt(balance)}</span>
-            <span className="balance__unit">demo credits</span>
+            <span className="balance__unit">{engine.getSnapshot().currency || 'balance'}</span>
           </div>
-          {balance < 100 && (
-            <button className="btn-ghost btn-ghost--sm" onClick={() => engine.refill()}>
-              Refill
-            </button>
-          )}
+          <button className="btn-ghost btn-ghost--sm" onClick={() => void engine.refreshBalance()} aria-label="Refresh balance">
+            Refresh
+          </button>
         </div>
         <button className="icon-btn" aria-label="How to play" onClick={onHelp}>
           <HelpIcon />
@@ -80,7 +78,7 @@ export function Header({ balance, soundOn, engine, sfx, onHelp, onMenu }: Props)
 export function Footer() {
   return (
     <footer className="footer">
-      <span>Demo credits only · no cash value · 18+ only</span>
+      <span>Results and payouts are decided by the game server · 18+ only</span>
     </footer>
   );
 }

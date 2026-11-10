@@ -3,3 +3,6 @@ dist
 .DS_Store
 *.log
 .vite
+
+# Local copy of the game server (has its own repo)
+GameEngineAPI/
